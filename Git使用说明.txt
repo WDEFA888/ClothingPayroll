@@ -1,0 +1,49 @@
+Git 使用说明（衣账项目）
+
+一、Git 是什么
+它给项目拍“快照”。每次改完，存一个快照；以后改坏了，可以回到任何一个快照。
+快照保存在项目里的 .git 文件夹，不会上传网络。
+
+二、最常用的 4 条命令
+打开 Git Bash，先进入项目：
+  cd /d/Projects/ClothingPayroll
+
+1. 看现在改了什么
+  git status
+
+2. 保存一个快照（每次改完都做）
+  git add -A
+  git commit -m "说明这次改了什么"
+
+3. 看历史快照
+  git log --oneline
+
+4. 看某次快照改了什么
+  git show 快照编号
+
+三、改坏了怎么退回
+只退回一个文件（丢弃未保存的修改）：
+  git restore 文件名
+
+回到某次快照的某个文件看看（不会改当前文件）：
+  git show 快照编号:文件名
+
+四、哪些东西不会进快照
+- desktop/node_modules（依赖，可重新下载）
+- desktop/dist（安装包，可重新打包）
+- tests/browser-artifacts（测试截图和下载）
+- versions（旧版备份，Git 已经负责历史）
+- 任何 .xlsx、.csv、.pdf 和“完整备份”JSON（防止真实工资入库）
+
+规则写在 .gitignore 文件里。
+
+五、注意
+- 根目录和 desktop 目录各有一份 app.js、core.js、excel.js、style.css、工资助手.html。
+  改完根目录后，要复制到 desktop/，两边保持一致，再一起提交。
+- 当前提交身份是项目本地占位：
+    user.name  = 衣账项目
+    user.email = yizhang@localhost
+  想改成自己的，执行：
+    git config user.name "你的名字"
+    git config user.email "你的邮箱"
+- 不要执行 git push，除非你明确要上传到 GitHub。
