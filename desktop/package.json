@@ -1,0 +1,55 @@
+{
+  "name": "yizhang-payroll",
+  "productName": "衣账工资助手",
+  "version": "0.4.1",
+  "description": "衣账 · 四店工资助手（单机版，数据保存在本机）",
+  "main": "main.js",
+  "author": "衣账",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "latest",
+    "electron-builder": "latest"
+  },
+  "build": {
+    "appId": "com.yizhang.payroll",
+    "productName": "衣账工资助手",
+    "asar": true,
+    "files": [
+      "main.js",
+      "preload.js",
+      "工资助手.html",
+      "app.js",
+      "core.js",
+      "excel.js",
+      "style.css",
+      "icons/LICENSE-tabler.txt"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "衣账工资助手",
+      "artifactName": "衣账工资助手-安装包-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "衣账工资助手-便携版-${version}.${ext}"
+    }
+  }
+}

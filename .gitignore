@@ -1,0 +1,25 @@
+# 依赖与打包产物（可由 npm 重新生成，不入库）
+desktop/node_modules/
+desktop/dist/
+desktop/*.log
+
+# 测试运行产物：截图、下载的虚构文件、隔离浏览器数据
+tests/browser-artifacts/
+
+# 旧版源文件备份（Git 本身保存历史，这里不重复入库）
+versions/
+
+# 敏感数据：备份、工资单、导出文件，绝不提交
+*完整备份*.json
+*工资表*.csv
+*工资单*.xlsx
+*个人工资条*.csv
+*.xlsx
+*.csv
+*.pdf
+*.xls
+
+# 系统与编辑器杂项
+.DS_Store
+Thumbs.db
+desktop.asar
