@@ -13,6 +13,13 @@
   const oldFields = ['base', 'commission', 'bonus', 'subsidy', 'deduction', 'insurance', 'tax'];
   const labels = {base: '基本工资', mealAllowance: '饭贴', commission: '提成', bonus: '奖金', housingAllowance: '房贴', insuranceAllowance: '社保（应发项）', subsidy: '其他补贴', extraPay: '其他补发', depositRefund: '退还押金', leaveDeduction: '请假扣款', lateness: '迟到扣款', clothing: '买衣服扣款', advance: '预支工资抵扣', depositDeduction: '押金扣款（历史项）', deduction: '其他扣款', insurance: '个人社保公积金扣款', tax: '个人所得税'};
   function assert(ok, message) { if (!ok) throw new Error(message); }
+  function noDanger(obj, label) {
+    // JSON.parse 可以把 __proto__ 变成自有属性；禁止它，避免恢复备份时污染原型。
+    if (!obj || typeof obj !== 'object') return;
+    for (const key of Object.keys(obj)) {
+      if (key === '__proto__' || key === 'constructor' || key === 'prototype') throw new Error(label + '含有不允许的字段：' + key);
+    }
+  }
   function monthValid(value) { return typeof value === 'string' && /^20\d{2}-(0[1-9]|1[0-2])$/.test(value); }
   function text(value, max, label) { assert(typeof value === 'string' && value.length <= max, label + '格式不正确'); }
   function centsValid(value) { return Number.isSafeInteger(value) && value >= 0 && value <= MAX; }
@@ -27,6 +34,7 @@
   function days(value) { const n = money(value); assert(n <= 3100, '请假天数必须在 0—31 天之间'); return n; }
   function commissionCents(input) {
     // 仅支持数字与 + - × ÷ % 括号的算式，返回整数分；不执行任何脚本。
+    if (String(input).length > 500) throw new Error('算式过长，请简化后再试');
     const s = String(input)
       .replace(/[×＋－÷％（）]/g, c => ({'×':'*','＋':'+','－':'-','÷':'/','％':'%','（':'(','）':')'}[c]))
       .replace(/[，,]/g, '')
@@ -78,6 +86,7 @@
   }
   function validateSource(source) {
     assert(source && typeof source === 'object', '原表来源格式不正确');
+    noDanger(source, '原表来源');
     text(source.fileName, 260, '源文件名'); text(source.sheet, 100, '工作表名'); text(source.section, 200, '原表标题'); text(source.number, 60, '原表编号');
     assert(typeof source.fingerprint === 'string' && /^[a-f0-9]{64}$/.test(source.fingerprint), '源文件指纹不正确');
     assert(Number.isSafeInteger(source.row) && source.row > 0 && source.row <= 1048576, '原表行号不正确');
@@ -90,15 +99,18 @@
   }
   function validate(state) {
     assert(state && state.app === 'clothing-payroll' && state.version === 2, '不是本软件支持的备份文件');
+    noDanger(state, '备份');
     assert(Array.isArray(state.shops) && state.shops.length === 4, '备份必须包含四家实际店铺');
     const shops = new Set([UNASSIGNED]);
     state.shops.forEach(s => {
+      noDanger(s, '店铺');
       text(s.id, 80, '店铺编号'); assert(s.id && !shops.has(s.id), '店铺编号重复'); shops.add(s.id);
       text(s.name, 60, '店名'); assert(s.name.trim(), '店名不能为空'); assert(['线下', '线上'].includes(s.type), '店铺类型不正确');
     });
     assert(Array.isArray(state.employees) && state.employees.length <= 10000, '员工数据格式不正确或超过一万人');
     const employees = new Set();
     state.employees.forEach(e => {
+      noDanger(e, '员工');
       text(e.id, 80, '员工编号'); assert(e.id && !employees.has(e.id), '员工编号重复'); employees.add(e.id);
       text(e.name, 60, '姓名'); assert(e.name.trim(), '姓名不能为空'); text(e.role, 60, '岗位');
       assert(shops.has(e.shopId), '员工所属店铺不存在');
@@ -111,9 +123,11 @@
     assert(state.months && typeof state.months === 'object' && !Array.isArray(state.months) && Object.keys(state.months).length <= 1200, '月份数据不正确');
     Object.entries(state.months).forEach(([key, month]) => {
       assert(monthValid(key) && month && typeof month.locked === 'boolean', '月份格式不正确');
+      noDanger(month, '月份');
       assert(Array.isArray(month.rows) && month.rows.length <= 10000, '工资明细格式不正确');
       const ids = new Set();
       month.rows.forEach(r => {
+        noDanger(r, '工资记录');
         assert(employees.has(r.employeeId) && !ids.has(r.employeeId), '工资表存在未知员工或重复员工'); ids.add(r.employeeId);
         text(r.name, 60, '工资表姓名'); assert(r.name.trim(), '工资表姓名不能为空'); text(r.role, 60, '工资表岗位');
         assert(shops.has(r.shopId), '工资表所属店铺不存在');
@@ -123,6 +137,7 @@
         if (r.source !== undefined) validateSource(r.source);
         if (r.review !== undefined) {
           assert(r.review && typeof r.review.confirmed === 'boolean', '核实状态不正确');
+          noDanger(r.review, '核实信息');
           text(r.review.reason, 1000, '核实说明'); text(r.review.at, 40, '核实时间');
           assert(!r.review.confirmed || r.review.reason.trim().length >= 2, '确认核实需要填写说明');
         }
@@ -135,12 +150,13 @@
         const ids = new Set();
         notes.forEach(entry => {
           assert(entry && employees.has(entry.employeeId) && !ids.has(entry.employeeId), '员工月度备注存在未知员工或重复记录');
+          noDanger(entry, '员工备注');
           ids.add(entry.employeeId); text(entry.note, 1000, '员工月度备注');
         });
       });
     }
     assert(Array.isArray(state.logs) && state.logs.length <= 500, '操作记录格式不正确');
-    state.logs.forEach(l => { text(l.at, 40, '记录时间'); text(l.message, 4000, '操作记录'); });
+    state.logs.forEach(l => { noDanger(l, '操作记录'); text(l.at, 40, '记录时间'); text(l.message, 4000, '操作记录'); });
     return state;
   }
   function issues(row) {

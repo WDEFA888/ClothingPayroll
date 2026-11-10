@@ -52,6 +52,11 @@ async function freePort() { const s = net.createServer(); await new Promise(r =>
     const title = await evaluate('document.title');
     assert.ok(title.includes('衣账'), '窗口标题应包含衣账：' + title);
     assert.equal(await evaluate("typeof window.desktop?.saveFile"), 'function');
+    assert.equal(await evaluate("typeof window.desktop?.loadData"), 'function');
+    assert.equal(await evaluate("typeof window.desktop?.saveData"), 'function');
+    // 数据镜像文件读写可用。
+    assert.equal(await evaluate("window.desktop.saveData('__mirror__').then(()=>window.desktop.loadData())"), '__mirror__');
+    assert.equal(await evaluate("window.desktop.saveData('').then(()=>window.desktop.loadData())"), null);
     // localStorage 读写可用。
     await evaluate("localStorage.setItem('__smoke__','ok')");
     assert.equal(await evaluate("localStorage.getItem('__smoke__')"), 'ok');
@@ -59,6 +64,19 @@ async function freePort() { const s = net.createServer(); await new Promise(r =>
     // 主界面渲染（侧栏品牌与汇总卡片）。
     assert.ok((await evaluate("document.querySelector('.brand')?.textContent")).includes('衣账'));
     assert.ok(await evaluate("!!document.querySelector('.summary-bar')"));
+    const listPages = async () => (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).filter(t => t.type === 'page');
+    const beforePages = await listPages();
+    await evaluate("window.open('https://example.com/','_blank')");
+    await delay(500);
+    assert.equal((await listPages()).length, beforePages.length, '外部链接不应打开新窗口');
+    await evaluate("location.href='https://example.com/'");
+    await delay(400);
+    assert.equal(await evaluate('location.protocol'), 'file:', '页面不应跳转离开本程序');
+    await evaluate("window.open('工资助手.html?demo=1','_blank')");
+    let demoPage;
+    for (let i = 0; i < 40; i++) { demoPage = (await listPages()).find(t => t.url.includes('demo=1')); if (demoPage) break; await delay(100); }
+    assert.ok(demoPage, '演示窗口应能正常打开');
+    await fetch(`http://127.0.0.1:${port}/json/close/${demoPage.id}`).catch(() => {});
     const img = await call('Page.captureScreenshot', {format: 'png'});
     fs.writeFileSync(path.join(work, packaged ? 'packaged-app.png' : 'electron-app.png'), Buffer.from(img.data, 'base64'));
     assert.deepEqual(errors, [], '存在渲染进程错误');

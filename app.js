@@ -72,6 +72,7 @@
     const serialized = JSON.stringify(next);
     localStorage.setItem(key, serialized);
     state = next; raw = serialized; blocked = false;
+    if (!isDemo && window.desktop?.saveData) window.desktop.saveData(serialized).catch(() => {});
     $('fatal').hidden = true;
     $('save-status').textContent = '已保存 ' + new Date().toLocaleTimeString('zh-CN', {hour12: false});
     render();
@@ -298,6 +299,60 @@
     commit(s => C.updateRow(s, monthKey(), $('salary-employee-id').value, values));
     $('salary-dialog').close(); toast('本月工资已保存，原表实发未改动');
   }));
+  function bytesToBase64(bytes) {
+    let binary = ''; const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    return btoa(binary);
+  }
+  function base64ToBytes(str) {
+    const binary = atob(str), bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+  async function encryptBackup(plaintext, password) {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const keyMaterial = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
+    const key = await crypto.subtle.deriveKey({name:'PBKDF2', salt, iterations:200000, hash:'SHA-256'}, keyMaterial, {name:'AES-GCM', length:256}, false, ['encrypt']);
+    const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, new TextEncoder().encode(plaintext));
+    return JSON.stringify({app:'clothing-payroll-backup', encrypted:true, v:1, kdf:'PBKDF2-SHA256', iterations:200000, salt:bytesToBase64(salt), iv:bytesToBase64(iv), data:bytesToBase64(new Uint8Array(ct))});
+  }
+  async function decryptBackup(payload, password) {
+    const keyMaterial = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
+    const key = await crypto.subtle.deriveKey({name:'PBKDF2', salt:base64ToBytes(payload.salt), iterations:payload.iterations || 200000, hash:'SHA-256'}, keyMaterial, {name:'AES-GCM', length:256}, false, ['decrypt']);
+    try {
+      const pt = await crypto.subtle.decrypt({name:'AES-GCM', iv:base64ToBytes(payload.iv)}, key, base64ToBytes(payload.data));
+      return new TextDecoder().decode(pt);
+    } catch (_) { throw new Error('密码不正确，或备份文件已损坏'); }
+  }
+  let passwordResolver = null, passwordRequireConfirm = false;
+  function askPassword(title, hint, requireConfirm) {
+    passwordRequireConfirm = !!requireConfirm;
+    $('password-title').textContent = title;
+    $('password-hint').textContent = hint || '';
+    $('password-input').value = ''; $('password-confirm').value = '';
+    $('password-confirm-wrap').hidden = !passwordRequireConfirm;
+    $('password-error').hidden = true; $('password-error').textContent = '';
+    $('password-dialog').showModal();
+    return new Promise(resolve => { passwordResolver = resolve; });
+  }
+  function resolvePassword(value) {
+    if (passwordResolver) { const r = passwordResolver; passwordResolver = null; r(value); }
+    if ($('password-dialog').open) $('password-dialog').close();
+  }
+  $('password-form').addEventListener('submit', event => {
+    event.preventDefault();
+    const value = $('password-input').value, err = $('password-error');
+    if (!value) { err.textContent = '请输入密码'; err.hidden = false; return; }
+    if (passwordRequireConfirm) {
+      if (value.length < 6) { err.textContent = '密码至少 6 位，建议更长'; err.hidden = false; return; }
+      if (value !== $('password-confirm').value) { err.textContent = '两次输入不一致，请重新输入'; err.hidden = false; return; }
+    }
+    resolvePassword(value);
+  });
+  $('password-dialog').addEventListener('close', () => {
+    if (passwordResolver) { const r = passwordResolver; passwordResolver = null; r(null); }
+  });
   async function download(name, data, mime) {
     if (window.desktop?.saveFile) {
       try {
@@ -492,17 +547,44 @@
     if (!confirm('店名修改后，历史工资会按相同店铺编号显示新店名。确定保存吗？')) return;
     commit(s => {const before = s.shops.map(shop => shop.name).join('、'); values.forEach(v => s.shops.find(shop => shop.id === v.id).name = v.name); C.log(s, '店名从 ' + before + ' 改为 ' + values.map(v => v.name).join('、'));}); toast('店名已保存');
   }));
-  $('backup').addEventListener('click', safe(() => download((isDemo ? '演示-' : '') + '衣账-完整备份-' + currentMonth + '-' + Date.now() + '.json', blocked && raw !== null ? raw : JSON.stringify(state, null, 2), 'application/json')));
+  $('backup').addEventListener('click', safe(async () => {
+    const plaintext = blocked && raw !== null ? raw : JSON.stringify(state, null, 2);
+    const password = await askPassword('设置备份密码', '这份备份会被加密，恢复时需要输入这个密码。', true);
+    if (!password) return;
+    const encrypted = await encryptBackup(plaintext, password);
+    await download((isDemo ? '演示-' : '') + '衣账-加密备份-' + currentMonth + '-' + Date.now() + '.json', encrypted, 'application/json');
+    toast('已生成加密备份。请牢记密码，忘记将无法恢复。');
+  }));
   $('restore').addEventListener('click', () => $('restore-file').click());
   $('restore-file').addEventListener('change', safe(async event => {
     const file = event.target.files[0]; event.target.value = ''; if (!file) return;
     if (file.size > 20000000) throw new Error('备份文件超过 20MB，无法导入');
-    const restored = C.upgrade(JSON.parse(await file.text()));
+    let parsed;
+    try { parsed = JSON.parse(await file.text()); }
+    catch (_) { throw new Error('备份文件不是有效的 JSON，请选择正确的备份文件'); }
+    let restored;
+    if (parsed && parsed.encrypted === true) {
+      const password = await askPassword('输入备份密码', '这份备份是加密的，请输入当时设置的密码。', false);
+      if (!password) return;
+      let plaintext;
+      try { plaintext = await decryptBackup(parsed, password); }
+      catch (error) { throw error; }
+      try { restored = C.upgrade(JSON.parse(plaintext)); }
+      catch (_) { throw new Error('密码正确，但备份内容损坏或不是本软件的备份'); }
+    } else {
+      restored = C.upgrade(parsed);
+      if (!confirm('这是未加密的旧版备份。恢复后建议立即用密码重新备份。确定继续恢复吗？')) return;
+    }
     const count = Object.values(restored.months).reduce((n, m) => n + m.rows.length, 0);
     const employees = restored.employees.filter(e => !e.deleted).length;
     if (!confirm(`备份包含 ${employees} 位员工档案、${restored.employees.length-employees} 位已删除关联档案、${Object.keys(restored.months).length} 个月、${count} 条工资。\n这会替换${isDemo ? '演示' : '正式'}空间的全部数据，包括锁账记录和未保存的备注草稿。请先下载当前备份。确定继续？`)) return;
     const phrase = prompt('为避免误覆盖，请输入“确认恢复”继续：'); if (phrase !== '确认恢复') return;
-    commit(s => {Object.keys(s).forEach(k => delete s[k]); Object.assign(s, restored); C.log(s, '从本地备份恢复全部数据（原空间数据被替换）');}, true);
+    commit(s => {
+      Object.keys(s).forEach(k => delete s[k]);
+      // 只复制已知字段，避免备份里的 __proto__ 等字段影响原型。
+      for (const k of ['app','version','employees','months','employeeNotes','logs','shops']) if (restored[k] !== undefined) s[k] = structuredClone(restored[k]);
+      C.log(s, '从本地备份恢复全部数据（原空间数据被替换）');
+    }, true);
     noteDrafts.clear(); renderEmployees();
     toast('备份已恢复，请核对员工和工资');
   }));
@@ -512,6 +594,7 @@
     const phrase = prompt('为避免误删，请输入“清空数据”继续（取消则不删除）：'); if (phrase !== '清空数据') return;
     localStorage.removeItem('yizhang-payroll-v1');
     localStorage.removeItem('yizhang-payroll-v1-demo');
+    if (window.desktop?.saveData) window.desktop.saveData('').catch(() => {});
     state = C.newState(); raw = null; blocked = false; stagedImport = null;
     noteDrafts.clear();
     $('month').value = currentMonth; $('search').value = ''; $('shop-filter').value = '';
@@ -528,4 +611,23 @@
   });
   render();
   if (!blocked) $('save-status').textContent = raw === null ? '尚无工资数据 · 本地空间' : '已读取本机数据';
+  if (!isDemo && window.desktop?.loadData) {
+    (async () => {
+      if (raw !== null) { window.desktop.saveData(raw).catch(() => {}); return; }
+      if (blocked) return;
+      try {
+        const text = await window.desktop.loadData();
+        if (!text) return;
+        const restored = C.upgrade(JSON.parse(text));
+        const serialized = JSON.stringify(restored);
+        localStorage.setItem(key, serialized);
+        state = restored; raw = serialized; blocked = false;
+        $('month').value = Object.keys(state.months).sort().at(-1) || currentMonth;
+        employeeNoteMonth = $('month').value;
+        $('fatal').hidden = true;
+        render();
+        $('save-status').textContent = '已从本机数据文件恢复';
+      } catch (_) { /* 镜像文件损坏时忽略，不影响启动 */ }
+    })();
+  }
 })();

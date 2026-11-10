@@ -189,6 +189,18 @@ test('提成算式计算百分比、固定金额、每件与四则运算，结�
 });
 test('提成算式拒绝空、非法字符、括号不匹配、负结果、除零和超限',()=>{
   for(const value of ['','abc','50000xx','3%%','(1+2','1+2)','-5','1/0','100000000000×100','2..5','×5'])assert.throws(()=>C.commissionCents(value),value);
+  assert.throws(()=>C.commissionCents('('.repeat(300)+'1'+')'.repeat(300)),/过长/);
+  assert.equal(C.commissionCents('('.repeat(200)+'1'+')'.repeat(200)),100);
+});
+test('备份拒绝 __proto__、constructor 等原型污染字段',()=>{
+  const s=fixture();
+  const top=JSON.parse(JSON.stringify(s).replace(/^\{/, '{"__proto__":{"polluted":true},'));
+  assert.throws(()=>C.upgrade(top),/__proto__/);
+  assert.equal({}.polluted,undefined);
+  const nested=JSON.parse(JSON.stringify(s).replace('"name":"测试员工"','"constructor":{},"name":"测试员工"'));
+  assert.throws(()=>C.upgrade(nested),/constructor/);
+  const valid=C.upgrade(JSON.parse(JSON.stringify(s)));
+  assert.equal(valid.employees.length,1);
 });
 test('Excel 导出是真实 ZIP 工作簿，文本不作为公式执行',()=>{
   const Excel=require('../excel.js'),data=Excel.writeWorkbook([{name:'测试',rows:[['姓名','金额'],['=HYPERLINK("https://example.invalid")',{v:123.45,s:2}]]}]);

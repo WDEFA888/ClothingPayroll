@@ -8,6 +8,32 @@ const assert = require('node:assert/strict');
 const {pathToFileURL} = require('node:url');
 const {textContrastReport} = require('./ui-checks.js');
 const delay = ms => new Promise(r => setTimeout(r, ms));
+function storedZip(entries) {
+  const {crc32} = require('../excel.js');
+  const chunks = [], central = []; let offset = 0;
+  for (const entry of entries) {
+    const name = Buffer.from(entry.name, 'utf8');
+    const data = Buffer.isBuffer(entry.data) ? entry.data : Buffer.from(entry.data, 'utf8');
+    const flags = entry.flags || 0x800, crc = crc32(data);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(20, 4); local.writeUInt16LE(flags, 6);
+    local.writeUInt16LE(0, 8); local.writeUInt32LE(crc, 14); local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(entry.size ?? data.length, 22); local.writeUInt16LE(name.length, 26);
+    chunks.push(local, name, data);
+    const dir = Buffer.alloc(46);
+    dir.writeUInt32LE(0x02014b50, 0); dir.writeUInt16LE(20, 4); dir.writeUInt16LE(20, 6);
+    dir.writeUInt16LE(flags, 8); dir.writeUInt16LE(0, 10); dir.writeUInt32LE(crc, 16);
+    dir.writeUInt32LE(data.length, 20); dir.writeUInt32LE(entry.size ?? data.length, 24);
+    dir.writeUInt16LE(name.length, 28); dir.writeUInt32LE(offset, 42);
+    central.push(dir, name);
+    offset += 30 + name.length + data.length;
+  }
+  const dirSize = central.reduce((n, b) => n + b.length, 0);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(entries.length, 8); end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(dirSize, 12); end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...chunks, ...central, end]);
+}
 const root = path.resolve(__dirname, '..');
 const work = path.join(__dirname, 'browser-artifacts', 'run-' + Date.now());
 fs.mkdirSync(work, {recursive:true});
@@ -97,10 +123,26 @@ async function freePort() { const s = net.createServer(); await new Promise(r=>s
     assert.equal(await evaluate("document.querySelector('[data-employee-note=\"demo-0\"]').value"),managerNote);
     await screenshot('06-demo-employees-desktop.png');
     console.log('PASS 员工备注按月份独立保存、跨月草稿保留、刷新读取、清空与文本转义');
+    const xss='<img src=x onerror=alert(1)>';
+    await click('[data-edit-employee="demo-0"]');await wait("document.querySelector('#employee-dialog').open");
+    await fill('#employee-name',xss);await fill('#employee-role','<svg onload=alert(1)>');
+    await click('#employee-form button[type=submit]');await wait("!document.querySelector('#employee-dialog').open");
+    assert.equal(await evaluate("document.querySelectorAll('#employees-body img,#employees-body [onerror],#employees-body [onload]').length"),0);
+    assert.ok((await evaluate("document.querySelector('#employees-body').textContent")).includes(xss));
+    await click('[data-edit-employee="demo-0"]');await wait("document.querySelector('#employee-dialog').open");
+    await fill('#employee-name','示例·陈导购');await fill('#employee-role','导购');
+    await click('#employee-form button[type=submit]');await wait("!document.querySelector('#employee-dialog').open");
     assert.equal(await evaluate("document.querySelector('#breadcrumb-current').textContent"),'员工档案');
     await click('.local-card [data-view="settings"]');
     assert.equal(await evaluate("document.querySelector('.nav-item.active').dataset.view"),'settings');
     assert.equal(await evaluate("document.querySelector('.nav-item.active').getAttribute('aria-current')"),'page');
+    await fill('[data-shop-id="offline-a"]',xss+'店');await click('#shops-form button[type=submit]');
+    await wait("document.querySelector('#shop-filter').options[1].textContent.includes('onerror')");
+    assert.equal(await evaluate("document.querySelectorAll('#shop-filter img,#shop-filter [onerror],#shop-filter [onload]').length"),0);
+    assert.ok((await evaluate("document.querySelector('#shop-filter').options[1].textContent")).includes(xss+'店'));
+    await fill('[data-shop-id="offline-a"]','上海实体店 A');await click('#shops-form button[type=submit]');
+    await wait("document.querySelector('#shop-filter').options[1].textContent==='上海实体店 A'");
+    console.log('PASS 恶意姓名、岗位、店名均按纯文本显示，不执行页面脚本');
     await screenshot('07-demo-settings-desktop.png');
     await click('.nav-item[data-view="payroll"]');
     console.log('PASS 演示隔离、筛选汇总卡片与导航状态');
@@ -185,20 +227,55 @@ async function freePort() { const s = net.createServer(); await new Promise(r=>s
     await click('[data-slip]');await click('#slip-csv');
     for(let i=0;i<100;i++){if(fs.readdirSync(work).some(f=>f.endsWith('个人工资条.csv')))break;await delay(50);}
     assert.ok(fs.readdirSync(work).some(f=>f.endsWith('个人工资条.csv')));await click('[data-close="slip-dialog"]');
-    await click('[data-view="settings"]');await click('#backup');
+    await click('[data-view="settings"]');
+    async function submitPassword(pw, confirm) {
+      await wait("document.querySelector('#password-dialog').open");
+      await fill('#password-input', pw);
+      if (confirm !== undefined) await fill('#password-confirm', confirm);
+      await click('#password-submit');
+      await wait("!document.querySelector('#password-dialog').open");
+    }
+    const pw = '测试密码123';
+    await click('#backup');await submitPassword(pw, pw);
     let backup;
-    for(let i=0;i<100;i++){backup=fs.readdirSync(work).filter(f=>f.startsWith('衣账-完整备份')&&f.endsWith('.json')).sort().at(-1);if(backup)break;await delay(50);}
-    assert.ok(backup,'备份未下载');const backed=JSON.parse(fs.readFileSync(path.join(work,backup),'utf8'));assert.equal(backed.employees.length,1);assert.equal(backed.employeeNotes[month][0].note,'仅内部：锁账后仍需跟进培训');
+    for(let i=0;i<100;i++){backup=fs.readdirSync(work).filter(f=>f.startsWith('衣账-加密备份')&&f.endsWith('.json')).sort().at(-1);if(backup)break;await delay(50);}
+    assert.ok(backup,'加密备份未下载');const backupText=fs.readFileSync(path.join(work,backup),'utf8');
+    const backed=JSON.parse(backupText);assert.equal(backed.encrypted,true);assert.equal(backed.app,'clothing-payroll-backup');
+    assert.ok(!backupText.includes('界面测试员工') && !backupText.includes('1000.01'),'加密备份不应包含明文工资');
     const n=await call('DOM.getDocument');const input=await call('DOM.querySelector',{nodeId:n.root.nodeId,selector:'#restore-file'});
-    dialogText='确认恢复';await call('DOM.setFileInputFiles',{nodeId:input.nodeId,files:[path.join(work,backup)]});
+    const beforeWrong=JSON.stringify(await state());
+    await call('DOM.setFileInputFiles',{nodeId:input.nodeId,files:[path.join(work,backup)]});
+    await submitPassword('错误密码');
+    assert.equal(JSON.stringify(await state()),beforeWrong,'错误密码不应恢复数据');
+    await call('DOM.setFileInputFiles',{nodeId:input.nodeId,files:[path.join(work,backup)]});
+    await submitPassword(pw);dialogText='确认恢复';
     await wait("document.querySelector('#audit-list').textContent.includes('从本地备份恢复全部数据')");dialogText='重新核对';
     assert.equal((await state()).months[month].rows[0].commission,100001);
     assert.equal((await state()).employeeNotes[month][0].note,'仅内部：锁账后仍需跟进培训');
-    console.log('PASS CSV 与个人工资条真实下载、JSON 备份真实下载及恢复');
+    console.log('PASS 加密备份：密码加密、明文不泄露、错误密码拒绝、正确密码恢复');
+    // 旧版明文备份仍可恢复
+    const legacy=path.join(work,'legacy-backup.json');fs.writeFileSync(legacy,JSON.stringify(await state()));
+    dialogAnswers=[{accept:true},{accept:true},{accept:true,promptText:'确认恢复'}];
+    await call('DOM.setFileInputFiles',{nodeId:input.nodeId,files:[legacy]});
+    await wait("document.querySelector('#audit-list').textContent.includes('从本地备份恢复全部数据')");
+    assert.ok(dialogs.some(d => d.includes('这是未加密的旧版备份')),'应提示旧版备份');
+    assert.equal((await state()).months[month].rows[0].commission,100001);
+    console.log('PASS 旧版明文备份仍可恢复（提示重新加密）');
     const invalid=path.join(work,'invalid-backup.json');fs.writeFileSync(invalid,'{"app":"other"}');
     const before=JSON.stringify(await state());await call('DOM.setFileInputFiles',{nodeId:input.nodeId,files:[invalid]});await delay(150);
     assert.equal(JSON.stringify(await state()),before);
     console.log('PASS 非法备份拒绝恢复，旧数据保持不变');
+    async function excelError(bytes){
+      const b64=bytes.toString('base64');
+      return evaluate(`(async()=>{try{await PayrollExcel.read(new File([Uint8Array.from(atob('${b64}'),c=>c.charCodeAt(0))],'evil.xlsx'));return 'OK'}catch(e){return e.message}})()`);
+    }
+    const wb='<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>';
+    assert.match(await excelError(storedZip([{name:'xl/workbook.xml',data:wb},{name:'../evil.xml',data:'x'}])),/内部路径异常/);
+    assert.match(await excelError(storedZip([{name:'xl/workbook.xml',data:wb},{name:'xl/workbook.xml',data:wb}])),/内部路径异常/);
+    assert.match(await excelError(storedZip([{name:'xl/workbook.xml',data:'<!DOCTYPE x [<!ENTITY a "b">]><workbook/>'}])),/外部实体/);
+    assert.match(await excelError(storedZip([{name:'xl/workbook.xml',data:wb,flags:1}])),/加密/);
+    assert.match(await excelError(storedZip([{name:'xl/workbook.xml',data:wb,size:9*1024*1024}])),/过大|目录损坏/);
+    console.log('PASS 恶意 XLSX：路径穿越、重复条目、DTD 实体、加密标记、伪造体积均被拒绝');
     await click('.nav-item[data-view="payroll"]');await click('#lock');await wait("document.querySelector('#lock-badge').textContent==='已锁账'");
     const retainedMonths=structuredClone((await state()).months);
     await click('.nav-item[data-view="employees"]');

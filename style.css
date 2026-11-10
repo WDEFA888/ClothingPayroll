@@ -269,6 +269,10 @@ legend { padding: 0 5px; color: var(--secondary); font-size: 11px; }
 .commission-panel textarea { min-height: 52px; }
 .commission-op { align-self: center; padding-bottom: 5px; color: var(--secondary); font-size: 16px; font-weight: 600; }
 .commission-panel .muted { flex-basis: 100%; margin-top: 2px; font-size: 10px; }
+.password-error { margin: 10px 0 0; color: var(--danger); font-size: 12px; line-height: 1.7; }
+#password-dialog { width: min(440px, 94vw); }
+#password-dialog .block-label { margin-top: 12px; }
+#password-dialog .muted { margin-top: 12px; }
 .commission-result { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line-strong); }
 .commission-result-label { color: var(--secondary); font-size: 12px; }
 .commission-result strong { color: #1f4a33; font-size: 21px; font-weight: 600; font-variant-numeric: tabular-nums; }
