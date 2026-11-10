@@ -125,7 +125,7 @@ td { padding: 9px 12px; border-bottom: 1px solid #eef0f1; font-size: 12px; line-
 th:first-child, td:first-child { padding-left: 16px; }
 th:last-child, td:last-child { padding-right: 16px; }
 tbody tr:last-child td { border-bottom: 0; }
-.payroll-table { min-width: 980px; }
+.payroll-table { min-width: 1420px; }
 .payroll-table tbody tr:not(.no-results):hover, .directory-table tbody tr:not(.no-results):hover { background: #f8faf8; }
 .numeric { text-align: right; font-variant-numeric: tabular-nums; }
 .end { text-align: right; }
