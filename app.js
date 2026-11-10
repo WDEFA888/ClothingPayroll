@@ -353,6 +353,35 @@
   $('password-dialog').addEventListener('close', () => {
     if (passwordResolver) { const r = passwordResolver; passwordResolver = null; r(null); }
   });
+  let promptResolver = null, promptValidator = null;
+  function askText(title, hint, options = {}) {
+    $('prompt-title').textContent = title;
+    $('prompt-hint').textContent = hint || '';
+    $('prompt-input').value = options.value || '';
+    $('prompt-input').placeholder = options.placeholder || '';
+    $('prompt-input').type = options.type || 'text';
+    $('prompt-error').hidden = true; $('prompt-error').textContent = '';
+    promptValidator = options.validator || null;
+    $('prompt-dialog').showModal();
+    $('prompt-input').focus();
+    return new Promise(resolve => { promptResolver = resolve; });
+  }
+  function resolvePrompt(value) {
+    if (promptResolver) { const r = promptResolver; promptResolver = null; r(value); }
+    if ($('prompt-dialog').open) $('prompt-dialog').close();
+  }
+  $('prompt-form').addEventListener('submit', event => {
+    event.preventDefault();
+    const value = $('prompt-input').value;
+    if (promptValidator) {
+      const error = promptValidator(value);
+      if (error) { $('prompt-error').textContent = error; $('prompt-error').hidden = false; return; }
+    }
+    resolvePrompt(value);
+  });
+  $('prompt-dialog').addEventListener('close', () => {
+    if (promptResolver) { const r = promptResolver; promptResolver = null; r(null); }
+  });
   async function download(name, data, mime) {
     if (window.desktop?.saveFile) {
       try {
@@ -473,7 +502,7 @@
     noteStatus();
   });
   window.addEventListener('beforeunload', event => { if (noteDrafts.size) { event.preventDefault(); event.returnValue = ''; } });
-  document.addEventListener('click', safe(event => {
+  document.addEventListener('click', safe(async event => {
     const button = event.target.closest('button'); if (!button || button.disabled) return;
     if (button.dataset.view) view(button.dataset.view);
     if (button.dataset.close) $(button.dataset.close).close();
@@ -492,7 +521,8 @@
       if (!employee) throw new Error('员工档案不存在或已删除');
       const count = Object.values(state.months).reduce((total,m) => total + m.rows.filter(r => r.employeeId === employee.id).length, 0);
       if (!confirm('确定删除员工“' + employee.name + '”（' + shopName(employee.shopId) + '）的档案？\n\n已生成的 ' + count + ' 条工资（包括已锁账记录）全部保留，不会被删除；以后不再自动为此员工生成工资。\n为保留历史关联，备份中仍会保存已删除档案和已保存的月度备注；此员工未保存的备注草稿会被丢弃。仅离职可选择“编辑档案”改为停用。\n\n删除不能直接撤销，建议先下载完整备份。')) return;
-      if (prompt('再次确认删除“' + employee.name + '”：请输入“删除员工”继续；取消则不删除。') !== '删除员工') return;
+      const entered = await askText('删除员工', '请输入“删除员工”四个字确认；取消则不删除。', {validator: v => v === '删除员工' ? '' : '请输入“删除员工”'});
+      if (entered !== '删除员工') return;
       commit(s => C.deleteEmployee(s, employee.id));
       for (const key of noteDrafts.keys()) if (key.slice(8) === employee.id) noteDrafts.delete(key);
       noteStatus();
@@ -518,10 +548,10 @@
     if (!confirm(`将为 ${month} 加入 ${count} 位员工，使用当前档案的默认底薪。已有工资不覆盖。补录历史月份时请人工核对名单，继续吗？`)) return;
     commit(s => C.generate(s, month)); toast('工资表已生成 / 补充，请逐人核对');
   }));
-  $('lock').addEventListener('click', safe(() => {
+  $('lock').addEventListener('click', safe(async () => {
     const m = monthData(); if (!m?.rows.length) return;
     if (m.locked) {
-      const reason = prompt('填写解锁原因（至少两个字，最多 500 字），将保留操作记录：');
+      const reason = await askText('填写解锁原因', '至少两个字，最多 500 字，将保留操作记录。', {placeholder: '例如：发现提成录错，需要修正', validator: v => v.trim().length >= 2 ? '' : '解锁原因至少两个字'});
       if (reason === null) return;
       commit(s => C.setLock(s, monthKey(), false, reason)); toast('已解锁，请在修改后重新核对锁账');
     } else {
@@ -578,7 +608,8 @@
     const count = Object.values(restored.months).reduce((n, m) => n + m.rows.length, 0);
     const employees = restored.employees.filter(e => !e.deleted).length;
     if (!confirm(`备份包含 ${employees} 位员工档案、${restored.employees.length-employees} 位已删除关联档案、${Object.keys(restored.months).length} 个月、${count} 条工资。\n这会替换${isDemo ? '演示' : '正式'}空间的全部数据，包括锁账记录和未保存的备注草稿。请先下载当前备份。确定继续？`)) return;
-    const phrase = prompt('为避免误覆盖，请输入“确认恢复”继续：'); if (phrase !== '确认恢复') return;
+    const phrase = await askText('确认恢复', '为避免误覆盖，请输入“确认恢复”四个字。', {validator: v => v === '确认恢复' ? '' : '请输入“确认恢复”'});
+    if (phrase !== '确认恢复') return;
     commit(s => {
       Object.keys(s).forEach(k => delete s[k]);
       // 只复制已知字段，避免备份里的 __proto__ 等字段影响原型。
@@ -588,10 +619,11 @@
     noteDrafts.clear(); renderEmployees();
     toast('备份已恢复，请核对员工和工资');
   }));
-  $('clear-data').addEventListener('click', safe(() => {
+  $('clear-data').addEventListener('click', safe(async () => {
     if (blocked) throw new Error('当前暂停写入，请先处理顶部提示或刷新后再操作');
     if (!confirm('确定清空本机全部数据吗？\n\n将删除正式空间和演示空间的全部员工、工资、锁账记录、操作记录和月度备注（本机浏览器存储）。网页文件本身不受影响。\n\n此操作不可撤销，刷新也无法找回。请务必先在本页点击“下载完整备份”保存数据。')) return;
-    const phrase = prompt('为避免误删，请输入“清空数据”继续（取消则不删除）：'); if (phrase !== '清空数据') return;
+    const phrase = await askText('清空数据', '为避免误删，请输入“清空数据”四个字；取消则不删除。', {validator: v => v === '清空数据' ? '' : '请输入“清空数据”'});
+    if (phrase !== '清空数据') return;
     localStorage.removeItem('yizhang-payroll-v1');
     localStorage.removeItem('yizhang-payroll-v1-demo');
     if (window.desktop?.saveData) window.desktop.saveData('').catch(() => {});

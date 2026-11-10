@@ -273,6 +273,9 @@ legend { padding: 0 5px; color: var(--secondary); font-size: 11px; }
 #password-dialog { width: min(440px, 94vw); }
 #password-dialog .block-label { margin-top: 12px; }
 #password-dialog .muted { margin-top: 12px; }
+#prompt-dialog { width: min(440px, 94vw); }
+#prompt-dialog input { width: 100%; margin-top: 4px; }
+#prompt-dialog .muted { margin: 0; }
 .commission-result { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line-strong); }
 .commission-result-label { color: var(--secondary); font-size: 12px; }
 .commission-result strong { color: #1f4a33; font-size: 21px; font-weight: 600; font-variant-numeric: tabular-nums; }

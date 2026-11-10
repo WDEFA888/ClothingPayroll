@@ -72,6 +72,7 @@ async function freePort() { const s = net.createServer(); await new Promise(r=>s
     async function reload(){await evaluate('window.__testReloadPending=true');await call('Page.reload');await wait("!window.__testReloadPending && document.readyState==='complete' && document.querySelector('#month')?.value.length===7");}
     async function click(selector){const pos=await evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});if(!e)throw Error('元素不存在');e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);await call('Input.dispatchMouseEvent',{type:'mousePressed',...pos,button:'left',clickCount:1});await call('Input.dispatchMouseEvent',{type:'mouseReleased',...pos,button:'left',clickCount:1});}
     async function fill(selector,value){await evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});e.value=${JSON.stringify(value)};e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));})()`);}
+    async function submitPrompt(value){await wait("document.querySelector('#prompt-dialog').open");await fill('#prompt-input',value);await click('#prompt-submit');await wait("!document.querySelector('#prompt-dialog').open");}
     const url=pathToFileURL(path.join(root,'工资助手.html')).href;
     const key='yizhang-payroll-v1';
     const state=()=>evaluate(`JSON.parse(localStorage.getItem('${key}'))`);
@@ -209,7 +210,7 @@ async function freePort() { const s = net.createServer(); await new Promise(r=>s
     await click('.nav-item[data-view="employees"]');await fill('[data-employee-note]','仅内部：锁账后仍需跟进培训');await click('[data-save-employee-note]');
     assert.deepEqual((await state()).months,lockedWages);
     await click('.nav-item[data-view="payroll"]');
-    await click('#lock');await wait("document.querySelector('#lock-badge').textContent==='待核对'");
+    await click('#lock');await submitPrompt('重新核对');await wait("document.querySelector('#lock-badge').textContent==='待核对'");
     assert.ok((await state()).logs.some(l=>l.message.includes('解锁，原因：重新核对')));
     console.log('PASS 锁账禁改与填写原因解锁');
     await click('[data-view="employees"]');await click('[data-edit-employee]');await fill('#employee-base','6000');await fill('#employee-name','修改后的姓名');await click('#employee-form button[type=submit]');await wait("!document.querySelector('#employee-dialog').open");
@@ -248,15 +249,17 @@ async function freePort() { const s = net.createServer(); await new Promise(r=>s
     await submitPassword('错误密码');
     assert.equal(JSON.stringify(await state()),beforeWrong,'错误密码不应恢复数据');
     await call('DOM.setFileInputFiles',{nodeId:input.nodeId,files:[path.join(work,backup)]});
-    await submitPassword(pw);dialogText='确认恢复';
-    await wait("document.querySelector('#audit-list').textContent.includes('从本地备份恢复全部数据')");dialogText='重新核对';
+    await submitPassword(pw);
+    await submitPrompt('确认恢复');
+    await wait("document.querySelector('#audit-list').textContent.includes('从本地备份恢复全部数据')");
     assert.equal((await state()).months[month].rows[0].commission,100001);
     assert.equal((await state()).employeeNotes[month][0].note,'仅内部：锁账后仍需跟进培训');
     console.log('PASS 加密备份：密码加密、明文不泄露、错误密码拒绝、正确密码恢复');
     // 旧版明文备份仍可恢复
     const legacy=path.join(work,'legacy-backup.json');fs.writeFileSync(legacy,JSON.stringify(await state()));
-    dialogAnswers=[{accept:true},{accept:true},{accept:true,promptText:'确认恢复'}];
+    dialogAnswers=[{accept:true},{accept:true}];
     await call('DOM.setFileInputFiles',{nodeId:input.nodeId,files:[legacy]});
+    await submitPrompt('确认恢复');
     await wait("document.querySelector('#audit-list').textContent.includes('从本地备份恢复全部数据')");
     assert.ok(dialogs.some(d => d.includes('这是未加密的旧版备份')),'应提示旧版备份');
     assert.equal((await state()).months[month].rows[0].commission,100001);
@@ -279,18 +282,21 @@ async function freePort() { const s = net.createServer(); await new Promise(r=>s
     await click('.nav-item[data-view="payroll"]');await click('#lock');await wait("document.querySelector('#lock-badge').textContent==='已锁账'");
     const retainedMonths=structuredClone((await state()).months);
     await click('.nav-item[data-view="employees"]');
-    async function deleteWithAnswers(answers){
-      const target=handledDialogs+answers.length;dialogAnswers=answers;
-      await click('[data-delete-employee]');
-      for(let i=0;i<100 && handledDialogs<target;i++)await delay(25);
-      assert.equal(handledDialogs,target,'删除确认弹窗未完成');
-      assert.equal(dialogAnswers.length,0);
-    }
     const beforeDelete=JSON.stringify(await state());
-    await deleteWithAnswers([{accept:false}]);assert.equal(JSON.stringify(await state()),beforeDelete);
-    await deleteWithAnswers([{accept:true},{accept:true,promptText:'输错确认文字'}]);assert.equal(JSON.stringify(await state()),beforeDelete);
-    await deleteWithAnswers([{accept:true},{accept:false}]);assert.equal(JSON.stringify(await state()),beforeDelete);
-    await deleteWithAnswers([{accept:true},{accept:true,promptText:'删除员工'}]);
+    // 取消删除：确认框选否
+    dialogAnswers=[{accept:false}];
+    await click('[data-delete-employee]');await delay(120);
+    assert.equal(JSON.stringify(await state()),beforeDelete);
+    // 确认删除但输错确认文字：提示错误、不删除
+    dialogAnswers=[{accept:true}];
+    await click('[data-delete-employee]');await wait("document.querySelector('#prompt-dialog').open");
+    await fill('#prompt-input','输错确认文字');await click('#prompt-submit');
+    assert.equal(await evaluate("document.querySelector('#prompt-error').hidden"),false);
+    await click('[data-close="prompt-dialog"]');await wait("!document.querySelector('#prompt-dialog').open");
+    assert.equal(JSON.stringify(await state()),beforeDelete);
+    // 确认删除 + 正确文字：删除成功
+    dialogAnswers=[{accept:true}];
+    await click('[data-delete-employee]');await submitPrompt('删除员工');
     await wait("document.querySelectorAll('[data-delete-employee]').length===0");
     assert.equal((await state()).employees[0].deleted,true);assert.equal((await state()).employees[0].active,false);
     assert.deepEqual((await state()).months,retainedMonths);
@@ -386,11 +392,9 @@ async function freePort() { const s = net.createServer(); await new Promise(r=>s
     console.log('PASS 320—1920 像素响应式布局、手机工资与员工卡片');
     await call('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
     await click('.nav-item[data-view="settings"]');
-    const clearDialogs=[{accept:true},{accept:true,promptText:'清空数据'}];
-    const clearTarget=handledDialogs+clearDialogs.length;dialogAnswers=clearDialogs;
+    dialogAnswers=[{accept:true}];
     await click('#clear-data');
-    for(let i=0;i<100 && handledDialogs<clearTarget;i++)await delay(25);
-    assert.equal(handledDialogs,clearTarget,'清空确认弹窗未完成');
+    await submitPrompt('清空数据');
     assert.equal(await evaluate("localStorage.getItem('yizhang-payroll-v1')"),null);
     assert.equal(await evaluate("localStorage.getItem('yizhang-payroll-v1-demo')"),null);
     await click('.nav-item[data-view="employees"]');
