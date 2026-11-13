@@ -1,6 +1,7 @@
 # 依赖与打包产物（可由 npm 重新生成，不入库）
 desktop/node_modules/
 desktop/dist/
+desktop/dist-new/
 desktop/*.log
 
 # 测试运行产物：截图、下载的虚构文件、隔离浏览器数据

@@ -207,3 +207,52 @@ test('Excel 导出是真实 ZIP 工作簿，文本不作为公式执行',()=>{
   assert.equal(data[0],0x50);assert.equal(data[1],0x4b);const text=Buffer.from(data).toString('utf8');
   assert.ok(text.includes('t="inlineStr"'));assert.ok(text.includes('=HYPERLINK'));assert.equal(text.includes('<f>'),false);assert.ok(text.includes('123.45'));
 });
+test('可新增店铺并删除未被引用的店铺',()=>{
+  const s=fixture();const id=C.addShop(s,'新开的实体店','线下');
+  assert.equal(s.shops.length,5);assert.ok(s.shops.some(sh=>sh.id===id&&sh.name==='新开的实体店'&&sh.type==='线下'));
+  assert.match(s.logs[0].message,/新增店铺/);
+  C.deleteShop(s,id);assert.equal(s.shops.length,4);assert.equal(s.shops.some(sh=>sh.id===id),false);assert.match(s.logs[0].message,/删除店铺/);
+  C.validate(s);
+});
+test('新增店铺重名时自动改用唯一名称',()=>{
+  const s=C.newState();
+  const a=C.addShop(s,'上海实体店 A','线下');
+  assert.equal(s.shops.find(sh=>sh.id===a).name,'新店铺5');
+  const b=C.addShop(s,'上海实体店 A','线上');
+  assert.equal(s.shops.find(sh=>sh.id===b).name,'新店铺6');
+});
+test('有员工或工资引用的店铺不能删除；无引用可删',()=>{
+  const s=fixture();
+  assert.throws(()=>C.deleteShop(s,'taobao-a'),/引用/);
+  assert.throws(()=>C.deleteShop(s,'taobao-b'),/引用/);
+  C.deleteShop(s,'offline-a');assert.equal(s.shops.length,3);C.validate(s);
+});
+test('新增店铺校验空名、类型与数量上限',()=>{
+  const s=C.newState();
+  assert.throws(()=>C.addShop(s,'   ','线下'),/不能为空/);
+  assert.throws(()=>C.addShop(s,'新店','其他'),/类型/);
+  while(s.shops.length<100)s.shops.push({id:'s'+s.shops.length,name:'店'+s.shops.length,type:'线下'});
+  assert.throws(()=>C.addShop(s,'超限店','线下'),/过多/);
+  const empty=C.newState();empty.shops=[];assert.throws(()=>C.validate(empty),/数量/);
+});
+test('删除最后一家店铺被阻止',()=>{
+  const s=C.newState();
+  C.deleteShop(s,'taobao-b');C.deleteShop(s,'taobao-a');C.deleteShop(s,'offline-b');
+  assert.equal(s.shops.length,1);
+  assert.throws(()=>C.deleteShop(s,'offline-a'),/至少需要保留/);
+});
+test('已删除员工的店铺引用会随删店一并清理',()=>{
+  const s=C.newState();
+  s.employees.push({id:'emp',name:'临时员工',role:'',shopId:'offline-a',serviceShopIds:['offline-a'],base:0,active:true,startMonth:'2026-01'});
+  C.deleteEmployee(s,'emp');
+  C.deleteShop(s,'offline-a');
+  assert.equal(s.employees[0].shopId,C.UNASSIGNED);
+  assert.deepEqual(s.employees[0].serviceShopIds,[]);
+  C.validate(s);
+});
+test('员工可服务多家店铺，不再限于4家',()=>{
+  const s=fixture();
+  while(s.shops.length<10)s.shops.push({id:'extra'+s.shops.length,name:'分店'+s.shops.length,type:'线下'});
+  s.employees[0].serviceShopIds=s.shops.map(sh=>sh.id);
+  C.validate(s);
+});

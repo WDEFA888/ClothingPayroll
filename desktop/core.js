@@ -33,7 +33,7 @@
   }
   function days(value) { const n = money(value); assert(n <= 3100, '请假天数必须在 0—31 天之间'); return n; }
   function commissionCents(input) {
-    // 仅支持数字与 + - × ÷ % 括号的算式，返回整数分；不执行任何脚本。
+    // 仅支持数字与 + - × ÷ % 括号的算式；用整数分数精确计算，返回整数分，不执行任何脚本。
     if (String(input).length > 500) throw new Error('算式过长，请简化后再试');
     const s = String(input)
       .replace(/[×＋－÷％（）]/g, c => ({'×':'*','＋':'+','－':'-','÷':'/','％':'%','（':'(','）':')'}[c]))
@@ -41,26 +41,45 @@
       .replace(/[\s　]/g, '');
     if (!s) throw new Error('请先填写提成算式');
     let pos = 0;
+    function gcd(a, b) { a = a < 0n ? -a : a; b = b < 0n ? -b : b; while (b) { const t = a % b; a = b; b = t; } return a; }
+    function reduce(f) { if (f.den < 0n) { f.num = -f.num; f.den = -f.den; } const g = gcd(f.num, f.den); return { num: f.num / g, den: f.den / g }; }
     function number() {
       const match = /^(\d+(\.\d+)?|\.\d+)/.exec(s.slice(pos));
       if (!match) throw new Error('算式里出现无法识别的数字，请检查：' + s.slice(pos));
-      pos += match[0].length; return Number(match[0]);
+      const raw = match[0]; pos += raw.length;
+      const [intPart, fracPart = ''] = raw.split('.');
+      const scale = 10n ** BigInt(fracPart.length);
+      return { num: BigInt(intPart || '0') * scale + BigInt(fracPart || '0'), den: scale };
     }
+    function add(a, b) { return reduce({ num: a.num * b.den + b.num * a.den, den: a.den * b.den }); }
+    function sub(a, b) { return reduce({ num: a.num * b.den - b.num * a.den, den: a.den * b.den }); }
+    function mul(a, b) { return reduce({ num: a.num * b.num, den: a.den * b.den }); }
+    function div(a, b) { if (b.num === 0n) throw new Error('算式里出现了除以 0'); return reduce({ num: a.num * b.den, den: a.den * b.num }); }
     function expr() {
       let value = term();
-      while (s[pos] === '+' || s[pos] === '-') { const op = s[pos++], rhs = term(); value = op === '+' ? value + rhs : value - rhs; }
+      while (s[pos] === '+' || s[pos] === '-') { const op = s[pos++], rhs = term(); value = op === '+' ? add(value, rhs) : sub(value, rhs); }
       return value;
     }
-    function term() { let value = factor(); while (s[pos] === '*' || s[pos] === '/') { const op = s[pos++], rhs = factor(); value = op === '*' ? value * rhs : value / rhs; } return value; }
-    function factor() { if (s[pos] === '-') { pos++; return -factor(); } if (s[pos] === '+') { pos++; return factor(); } return atom(); }
-    function atom() { let value; if (s[pos] === '(') { pos++; value = expr(); if (s[pos] !== ')') throw new Error('算式缺少右括号'); pos++; } else value = number(); if (s[pos] === '%') { pos++; value /= 100; } return value; }
+    function term() { let value = factor(); while (s[pos] === '*' || s[pos] === '/') { const op = s[pos++], rhs = factor(); value = op === '*' ? mul(value, rhs) : div(value, rhs); } return value; }
+    function factor() {
+      if (s[pos] === '-') { pos++; const v = factor(); return { num: -v.num, den: v.den }; }
+      if (s[pos] === '+') { pos++; return factor(); }
+      return atom();
+    }
+    function atom() {
+      let value;
+      if (s[pos] === '(') { pos++; value = expr(); if (s[pos] !== ')') throw new Error('算式缺少右括号'); pos++; }
+      else value = number();
+      if (s[pos] === '%') { pos++; value = reduce({ num: value.num, den: value.den * 100n }); }
+      return value;
+    }
     const result = expr();
     if (pos < s.length) throw new Error('算式末尾有多余内容：' + s.slice(pos));
-    if (!Number.isFinite(result)) throw new Error('算式结果无效，请检查是否除以了 0');
-    if (result < 0) throw new Error('提成结果不能为负数');
-    const cents = Math.round(result * 100);
-    if (!Number.isSafeInteger(cents) || cents > MAX) throw new Error('提成结果超过一亿元');
-    return cents;
+    if (result.den === 0n) throw new Error('算式结果无效，请检查是否除以了 0');
+    if (result.num < 0n) throw new Error('提成结果不能为负数');
+    const cents = (result.num * 200n + result.den) / (result.den * 2n);
+    if (cents > BigInt(MAX)) throw new Error('提成结果超过一亿元');
+    return Number(cents);
   }
   function amount(cents) { return (cents / 100).toFixed(2); }
   function dayText(value) { return String(value / 100); }
@@ -100,12 +119,14 @@
   function validate(state) {
     assert(state && state.app === 'clothing-payroll' && state.version === 2, '不是本软件支持的备份文件');
     noDanger(state, '备份');
-    assert(Array.isArray(state.shops) && state.shops.length === 4, '备份必须包含四家实际店铺');
+    assert(Array.isArray(state.shops) && state.shops.length >= 1 && state.shops.length <= 100, '店铺数量不正确');
     const shops = new Set([UNASSIGNED]);
+    const shopNames = new Set();
     state.shops.forEach(s => {
       noDanger(s, '店铺');
       text(s.id, 80, '店铺编号'); assert(s.id && !shops.has(s.id), '店铺编号重复'); shops.add(s.id);
       text(s.name, 60, '店名'); assert(s.name.trim(), '店名不能为空'); assert(['线下', '线上'].includes(s.type), '店铺类型不正确');
+      assert(!shopNames.has(s.name), '店铺名称不能重复'); shopNames.add(s.name);
     });
     assert(Array.isArray(state.employees) && state.employees.length <= 10000, '员工数据格式不正确或超过一万人');
     const employees = new Set();
@@ -114,7 +135,7 @@
       text(e.id, 80, '员工编号'); assert(e.id && !employees.has(e.id), '员工编号重复'); employees.add(e.id);
       text(e.name, 60, '姓名'); assert(e.name.trim(), '姓名不能为空'); text(e.role, 60, '岗位');
       assert(shops.has(e.shopId), '员工所属店铺不存在');
-      assert(Array.isArray(e.serviceShopIds) && e.serviceShopIds.length <= 4 && e.serviceShopIds.every(s => shops.has(s)) && new Set(e.serviceShopIds).size === e.serviceShopIds.length, '服务店铺格式不正确');
+      assert(Array.isArray(e.serviceShopIds) && e.serviceShopIds.length <= 100 && e.serviceShopIds.every(s => shops.has(s)) && new Set(e.serviceShopIds).size === e.serviceShopIds.length, '服务店铺格式不正确');
       assert(typeof e.active === 'boolean' && monthValid(e.startMonth), '员工状态或工资启用月份不正确');
       assert(e.deleted === undefined || typeof e.deleted === 'boolean', '员工删除标记不正确');
       assert(!e.deleted || !e.active, '已删除员工不能标记为在职');
@@ -199,6 +220,35 @@
     employee.deleted = true; employee.active = false;
     log(state, '删除员工档案：' + employee.name + '（编号：' + employee.id + '）；已生成工资全部保留，后续不再自动生成工资');
   }
+  function addShop(state, name, type) {
+    text(name, 60, '店名'); assert(name.trim(), '店名不能为空');
+    assert(['线下', '线上'].includes(type), '店铺类型不正确');
+    assert(state.shops.length < 100, '店铺数量过多');
+    const existing = new Set(state.shops.map(s => s.name));
+    let finalName = name.trim();
+    if (existing.has(finalName)) { let n = state.shops.length + 1; while (existing.has('新店铺' + n)) n++; finalName = '新店铺' + n; }
+    const shop = {id: crypto.randomUUID(), name: finalName, type};
+    state.shops.push(shop);
+    log(state, '新增店铺：' + shop.name + '（' + shop.type + '）');
+    return shop.id;
+  }
+  function deleteShop(state, shopId) {
+    const shop = state.shops.find(s => s.id === shopId);
+    assert(shop, '店铺不存在');
+    assert(state.shops.length > 1, '至少需要保留一家店铺，请先添加新店铺再删除');
+    const used = state.employees.some(e => !e.deleted && (e.shopId === shopId || e.serviceShopIds.includes(shopId))) ||
+      Object.values(state.months).some(m => (m.rows || []).some(r => r.shopId === shopId));
+    assert(!used, '这家店还有在职员工或工资记录引用，请先把相关人员调整到其他店，再删除');
+    // 已删除员工对这家店的引用一并清理，避免备份恢复时校验失败
+    state.employees.forEach(e => {
+      if (e.deleted) {
+        if (e.shopId === shopId) e.shopId = UNASSIGNED;
+        e.serviceShopIds = e.serviceShopIds.filter(id => id !== shopId);
+      }
+    });
+    state.shops = state.shops.filter(s => s.id !== shopId);
+    log(state, '删除店铺：' + shop.name + '（' + shop.type + '）');
+  }
   function generate(state, monthKey) {
     assert(monthValid(monthKey), '请选择 2000—2099 年内的月份');
     const month = state.months[monthKey] || {locked: false, rows: []};
@@ -279,5 +329,5 @@
     return '"' + str.replace(/"/g, '""') + '"';
   }
   function csv(rows) { return '﻿' + rows.map(row => row.map(csvCell).join(',')).join('\r\n'); }
-  return {fields, incomeFields, deductionFields, labels, MAX, UNASSIGNED, money, days, dayText, amount, commissionCents, gross, net, deductions, blankAmounts, newState, upgrade, validate, issues, pending, log, setEmployeeNote, deleteEmployee, generate, updateRow, setLock, importBatch, csv, monthValid};
+  return {fields, incomeFields, deductionFields, labels, MAX, UNASSIGNED, money, days, dayText, amount, commissionCents, gross, net, deductions, blankAmounts, newState, upgrade, validate, issues, pending, log, setEmployeeNote, deleteEmployee, addShop, deleteShop, generate, updateRow, setLock, importBatch, csv, monthValid};
 });

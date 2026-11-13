@@ -1,8 +1,8 @@
 {
   "name": "yizhang-payroll",
   "productName": "衣账工资助手",
-  "version": "0.4.5",
-  "description": "衣账 · 四店工资助手（单机版，数据保存在本机）",
+  "version": "0.4.18",
+  "description": "衣账 · 多店工资助手（单机版，数据保存在本机）",
   "main": "main.js",
   "author": "衣账",
   "license": "UNLICENSED",
@@ -26,6 +26,7 @@
       "app.js",
       "core.js",
       "excel.js",
+      "ai.js",
       "style.css",
       "icons/LICENSE-tabler.txt"
     ],

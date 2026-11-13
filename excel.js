@@ -164,14 +164,17 @@
   function escapeXml(value){return String(value??'').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));}
   function colName(index){let value=index+1,name='';while(value){value--;name=String.fromCharCode(65+value%26)+name;value=Math.floor(value/26);}return name;}
   function sheetXml(sheet){
-    const rows=sheet.rows.map((row,i)=>'<row r="'+(i+1)+'">'+row.map((value,j)=>{
-      const cell=value && typeof value==='object'?value:{v:value};const ref=colName(j)+(i+1),style=cell.s??(i===0?1:0);
-      if(typeof cell.v==='number'){check(Number.isFinite(cell.v),'导出金额异常');return `<c r="${ref}" s="${style}"><v>${cell.v}</v></c>`;}
-      return `<c r="${ref}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(cell.v)}</t></is></c>`;
-    }).join('')+'</row>').join('');
+    const rows=sheet.rows.map((row,i)=>{
+      const ht=sheet.rowHeights && sheet.rowHeights[i+1];
+      return '<row r="'+(i+1)+'"'+(ht?' ht="'+ht+'" customHeight="1"':'')+'>'+row.map((value,j)=>{
+        const cell=value && typeof value==='object'?value:{v:value};const ref=colName(j)+(i+1),style=cell.s??(i===0?1:0);
+        if(typeof cell.v==='number'){check(Number.isFinite(cell.v),'导出金额异常');return `<c r="${ref}" s="${style}"><v>${cell.v}</v></c>`;}
+        return `<c r="${ref}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(cell.v)}</t></is></c>`;
+      }).join('')+'</row>';
+    }).join('');
     const merges=sheet.merges?.length?'<mergeCells count="'+sheet.merges.length+'">'+sheet.merges.map(m=>'<mergeCell ref="'+escapeXml(m)+'"/>').join('')+'</mergeCells>':'';
     const cols=sheet.widths?'<cols>'+sheet.widths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')+'</cols>':'';
-    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="${NS}"><sheetViews><sheetView workbookViewId="0">${sheet.freeze?'<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>':''}</sheetView></sheetViews><sheetFormatPr defaultRowHeight="22"/>${cols}<sheetData>${rows}</sheetData>${sheet.filter?`<autoFilter ref="A1:${colName(sheet.rows[0].length-1)}${sheet.rows.length}"/>`:''}${merges}<pageMargins left="0.25" right="0.25" top="0.4" bottom="0.4" header="0.2" footer="0.2"/></worksheet>`;
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="${NS}"><sheetViews><sheetView workbookViewId="0">${sheet.freeze?'<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>':''}</sheetView></sheetViews><sheetFormatPr defaultRowHeight="14.5"/>${cols}<sheetData>${rows}</sheetData>${sheet.filter?`<autoFilter ref="A1:${colName(sheet.rows[0].length-1)}${sheet.rows.length}"/>`:''}${merges}<pageMargins left="0.25" right="0.25" top="0.4" bottom="0.4" header="0.2" footer="0.2"/></worksheet>`;
   }
   function pack(files){
     const chunks=[],directory=[];let offset=0;
@@ -187,29 +190,45 @@
       ['_rels/.rels','<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
       ['xl/workbook.xml',`<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="${NS}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((s,i)=>`<sheet name="${escapeXml(s.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets></workbook>`],
       ['xl/_rels/workbook.xml.rels',`<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`],
-      ['xl/styles.xml',`<?xml version="1.0"?><styleSheet xmlns="${NS}"><fonts count="2"><font><sz val="11"/><name val="Microsoft YaHei"/></font><font><b/><sz val="11"/><color rgb="FF255C4C"/><name val="Microsoft YaHei"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEEF5F1"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyAlignment="1"><alignment wrapText="1" vertical="center"/></xf><xf numFmtId="2" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`]];
+      ['xl/styles.xml',`<?xml version="1.0"?><styleSheet xmlns="${NS}"><fonts count="4"><font><sz val="11"/><name val="等线"/></font><font><sz val="24"/><color rgb="FF000000"/><name val="等线"/></font><font><sz val="9"/><name val="楷体"/></font><font><sz val="9"/><color rgb="FF000000"/><name val="等线"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="5"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top/><bottom style="medium"><color rgb="FF000000"/></bottom><diagonal/></border><border><left style="thin"><color rgb="FF000000"/></left><right style="thin"><color rgb="FF000000"/></right><top style="medium"><color rgb="FF000000"/></top><bottom style="thin"><color rgb="FF000000"/></bottom><diagonal/></border><border><left style="thin"><color rgb="FF000000"/></left><right style="thin"><color rgb="FF000000"/></right><top/><bottom style="thin"><color rgb="FF000000"/></bottom><diagonal/></border><border><left style="thin"><color rgb="FF000000"/></left><right style="thin"><color rgb="FF000000"/></right><top/><bottom style="medium"><color rgb="FF000000"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="2" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="3" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="3" fillId="0" borderId="4" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="3" fillId="0" borderId="4" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`]];
     sheets.forEach((sheet,i)=>files.push(['xl/worksheets/sheet'+(i+1)+'.xml',sheetXml(sheet)]));return pack(files);
   }
-  function payrollWorkbook(rows,month,shopName,locked){
-    const money=value=>({v:value/100,s:2});
-    const status=r=>C.pending(r)?'待核实':r.review?.confirmed?'已说明核实':locked?'已锁账':'待核对';
-    const header=['月份','姓名','岗位','归属店铺','请假天数',...C.fields.map(f=>C.labels[f]),'应发合计','扣款合计','软件计算实发','原表实发','差额（软件减原表）','核对状态','核实说明','备注','源文件','源工作表','原表行号'];
-    const summary=[header,...rows.map(r=>[month,r.name,r.role,shopName(r.shopId),r.leaveDays/100,...C.fields.map(f=>money(r[f])),money(C.gross(r)),money(C.deductions(r)),money(C.net(r)),r.source?.recordedNet==null?'':money(r.source.recordedNet),r.source?.recordedNet==null?'':money(C.net(r)-r.source.recordedNet),status(r),r.review?.reason||'',r.note,r.source?.fileName||'',r.source?.sheet||'',r.source?.row||''])];
-    const slips=[],merges=[];
-    rows.forEach((r,i)=>{
-      const start=slips.length+1;
-      const sourceSocial=r.source?.cells.some(c=>c.label==='社保'),sourceHousing=r.source?.cells.some(c=>c.label==='房贴');
-      const g=sourceSocial?'insuranceAllowance':'commission',h=sourceHousing?'housingAllowance':'bonus',j=r.clothing&&!r.lateness?'clothing':'lateness';
-      slips.push([{v:month+' · '+r.name+' · '+shopName(r.shopId)+' · '+status(r),s:1}],
-        ['编号','月份','姓名','请假天数','应发项目','','','','扣款项目','','','','软件实发','备注'].map(v=>({v,s:1})),
-        ['','','','',C.labels.base,C.labels.mealAllowance,C.labels[g],C.labels[h],C.labels.leaveDeduction,C.labels[j],C.labels.advance,C.labels.depositDeduction,'',''].map(v=>({v,s:1})),
-        [i+1,month,r.name,r.leaveDays/100,money(r.base),money(r.mealAllowance),money(r[g]),money(r[h]),money(r.leaveDeduction),money(r[j]),money(r.advance),money(r.depositDeduction),money(C.net(r)),r.note]);
-      const visible=new Set(['base','mealAllowance',g,h,'leaveDeduction',j,'advance','depositDeduction']);
-      const extra=C.fields.filter(f=>!visible.has(f)&&r[f]!==0).map(f=>C.labels[f]+': '+C.amount(r[f])).join('；');
-      slips.push(['其他已计入项目：'+(extra||'无')+'；原表实发：'+(r.source?.recordedNet==null?'未填写':C.amount(r.source.recordedNet))+'；核实说明：'+(r.review?.reason||C.issues(r).join('；')||'无')],[]);
-      merges.push(`A${start}:N${start}`,`E${start+1}:H${start+1}`,`I${start+1}:L${start+1}`,`A${start+4}:N${start+4}`);
+  function payrollWorkbook(rows, month, shopName, locked) {
+    const money = value => ({ v: value / 100, s: 4 });
+    const text = value => ({ v: value, s: 4 });
+    const monthText = month.slice(0, 4) + '年' + Number(month.slice(5)) + '月';
+    const slips = [], merges = [], rowHeights = {};
+    // 大标题（24 号大字，下边一条粗线）
+    slips.push(Array(14).fill().map((_, j) => j === 0 ? { v: monthText + '工资', s: 1 } : { v: '', s: 1 }));
+    merges.push('A1:N1');
+    rowHeights[1] = 30.5;
+    rows.forEach((r, i) => {
+      const start = slips.length + 1; // 表头行
+      const gKey = r.insuranceAllowance > 0 ? 'insuranceAllowance' : 'commission';
+      const gLabel = r.insuranceAllowance > 0 ? '社保' : '提成';
+      const hKey = r.housingAllowance > 0 ? 'housingAllowance' : 'bonus';
+      const hLabel = r.housingAllowance > 0 ? '房贴' : '奖金';
+      const jKey = r.lateness > 0 ? 'lateness' : 'clothing';
+      const jLabel = r.lateness > 0 ? '迟到' : '买衣服';
+      const listed = ['base', 'mealAllowance', gKey, hKey, 'leaveDeduction', jKey, 'advance', 'depositDeduction'];
+      const yuan = cents => (cents / 100).toFixed(2).replace(/\.?0+$/, '');
+      const extra = C.fields.filter(f => !listed.includes(f) && r[f] > 0).map(f => C.labels[f] + ' ' + yuan(r[f])).join('；');
+      const note = (r.note || '') + (extra ? (r.note ? '；' : '') + extra : '');
+      // 表头两行（楷体 9 号，块顶粗线）
+      slips.push(['编号', '日期', '姓名', '请假天数', '应发工资', '', '', '', '扣款项目', '', '', '', '实发金额', '备注'].map(v => ({ v, s: 2 })));
+      slips.push(['', '', '', '', '基本工资', '饭贴', gLabel, hLabel, '扣请假', jLabel, '预支工资', '员工押金', '', ''].map(v => ({ v, s: 3 })));
+      // 数据行（等线 9 号，块底粗线；备注左对齐）
+      slips.push([{ v: i + 1, s: 4 }, text(monthText), text(r.name), r.leaveDays > 0 ? { v: r.leaveDays / 100, s: 4 } : { v: '', s: 4 }, money(r.base), money(r.mealAllowance), money(r[gKey]), money(r[hKey]), money(r.leaveDeduction), money(r[jKey]), money(r.advance), money(r.depositDeduction), money(C.net(r)), { v: note, s: 5 }]);
+      rowHeights[start + 2] = 23.5;
+      slips.push([]);
+      merges.push(
+        'E' + start + ':G' + start, 'I' + start + ':L' + start,
+        'A' + (start + 2) + ':A' + (start + 3), 'B' + (start + 2) + ':B' + (start + 3),
+        'C' + (start + 2) + ':C' + (start + 3), 'D' + (start + 2) + ':D' + (start + 3),
+        'M' + (start + 2) + ':M' + (start + 3), 'N' + (start + 2) + ':N' + (start + 3)
+      );
     });
-    return writeWorkbook([{name:'工资汇总',rows:summary,freeze:true,filter:true,widths:header.map((_,i)=>i===1?16:i>=header.indexOf('核实说明')?28:17)},{name:'工资条',rows:slips,merges,widths:[7,12,14,12,16,12,16,16,14,14,16,18,16,35]}]);
+    return writeWorkbook([{ name: '工资单', rows: slips, merges, rowHeights, widths: [6, 12, 10, 9, 10, 10, 10, 10, 10, 10, 10, 10, 11, 24] }]);
   }
   return {read,writeWorkbook,payrollWorkbook,crc32};
 });

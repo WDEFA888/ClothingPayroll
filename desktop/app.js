@@ -70,7 +70,13 @@
     action(next);
     C.validate(next);
     const serialized = JSON.stringify(next);
-    localStorage.setItem(key, serialized);
+    try { localStorage.setItem(key, serialized); }
+    catch (error) {
+      if (error && (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED' || error.code === 22)) {
+        throw new Error('本机存储空间已满，本次修改未保存。请先到“店铺与备份”下载完整备份，再清理不再需要的历史数据。');
+      }
+      throw error;
+    }
     state = next; raw = serialized; blocked = false;
     if (!isDemo && window.desktop?.saveData) window.desktop.saveData(serialized).catch(() => {});
     $('fatal').hidden = true;
@@ -107,6 +113,13 @@
     return (monthData()?.rows || []).filter(r => (!filter || r.shopId === filter) && (!query || (r.name + ' ' + r.role).toLowerCase().includes(query)));
   }
   function restDeduction(row) { return row.lateness + row.deduction + row.insurance + row.tax; }
+  function deductionCell(v) {
+    const items = [['扣请假', v.leaveDeduction], ['买衣服', v.clothing], ['预支工资', v.advance], ['员工押金', v.depositDeduction], ['其余扣款', restDeduction(v)]];
+    const total = C.deductions(v);
+    if (!items.some(([, x]) => x !== 0)) return '<td class="numeric deduction-cell" data-label="扣款">' + C.amount(total) + '</td>';
+    const list = items.map(([label, x]) => '<div class="deduction-item' + (x === 0 ? ' zero' : '') + '"><span>' + label + '</span><span>' + C.amount(x) + '</span></div>').join('');
+    return '<td class="numeric deduction-cell" data-label="扣款"><details class="deduction-details"><summary>' + C.amount(total) + icon('chevron-right') + '</summary><div class="deduction-list">' + list + '</div></details></td>';
+  }
   function eligibleMissing() {
     const ids = new Set((monthData()?.rows || []).map(r => r.employeeId));
     return state.employees.filter(e => !e.deleted && e.active && e.startMonth <= $('month').value && !ids.has(e.id));
@@ -150,10 +163,12 @@
       const other=C.gross(r)-r.base-r.mealAllowance-r.commission;
       const diff=r.source?.recordedNet==null?null:C.net(r)-r.source.recordedNet;
       const description=(r.role||'岗位待补充')+' · '+shopName(r.shopId);
-      return `<tr><td class="person-cell">${person(r.name,description)}</td><td class="numeric" data-label="基本工资 / 饭贴"><span>${C.amount(r.base)}</span><small>饭贴 ${C.amount(r.mealAllowance)}</small></td><td class="numeric" data-label="提成">${C.amount(r.commission)}</td><td class="numeric" data-label="其他应发">${C.amount(other)}</td><td class="numeric" data-label="扣请假">${C.amount(r.leaveDeduction)}</td><td class="numeric" data-label="买衣服">${C.amount(r.clothing)}</td><td class="numeric" data-label="预支工资">${C.amount(r.advance)}</td><td class="numeric" data-label="员工押金">${C.amount(r.depositDeduction)}</td><td class="numeric" data-label="其余扣款">${C.amount(restDeduction(r))}</td><td class="numeric net-cell" data-label="软件实发"><strong class="net ${C.net(r)<0?'negative':''}">${C.amount(C.net(r))}</strong><small class="${diff!==null&&diff!==0?'difference-note':''}">${r.source?'原表 '+(r.source.recordedNet===null?'未填写':originalNet(r)):'未关联原表'}${diff!==null&&diff!==0?' · 差 '+C.amount(diff):''}</small></td><td class="status-cell" data-label="核对状态">${statusText(reviewText(r),status,C.issues(r).join('；')||'仍需人工审核')}${r.source?'<small class="source-ref">第 '+r.source.row+' 行</small>':''}</td><td class="row-action-cell"><div class="row-actions"><button class="text-button edit-action" data-edit-salary="${escape(r.employeeId)}" ${month.locked || blocked ? 'disabled' : ''}>编辑工资</button><button class="text-button" data-slip="${escape(r.employeeId)}">工资条</button>${month.locked || blocked ? '' : `<button class="text-button danger remove-action" data-remove="${escape(r.employeeId)}" title="从本月工资表移除" aria-label="从本月工资表移除 ${escape(r.name)}">${icon('trash')}</button>`}</div></td></tr>`;
-    }).join('') : '<tr class="no-results"><td colspan="12"><div class="no-results-content">'+icon('search')+'<span>没有找到匹配的员工</span><small>试试其他姓名，或切换店铺筛选。</small></div></td></tr>';
+      return `<tr><td class="person-cell">${person(r.name,description)}</td><td class="numeric" data-label="基本工资 / 饭贴"><span>${C.amount(r.base)}</span><small>饭贴 ${C.amount(r.mealAllowance)}</small></td><td class="numeric" data-label="提成">${C.amount(r.commission)}</td><td class="numeric" data-label="其他应发">${C.amount(other)}</td>${deductionCell(r)}<td class="numeric net-cell" data-label="软件实发"><strong class="net ${C.net(r)<0?'negative':''}">${C.amount(C.net(r))}</strong><small class="${diff!==null&&diff!==0?'difference-note':''}">${r.source?'原表 '+(r.source.recordedNet===null?'未填写':originalNet(r)):'未关联原表'}${diff!==null&&diff!==0?' · 差 '+C.amount(diff):''}</small></td><td class="status-cell" data-label="核对状态">${statusText(reviewText(r),status,C.issues(r).join('；')||'仍需人工审核')}${r.source?'<small class="source-ref">第 '+r.source.row+' 行</small>':''}</td><td class="row-action-cell"><div class="row-actions"><button class="text-button edit-action" data-edit-salary="${escape(r.employeeId)}" ${month.locked || blocked ? 'disabled' : ''}>编辑工资</button><button class="text-button" data-slip="${escape(r.employeeId)}">工资条</button>${month.locked || blocked ? '' : `<button class="text-button danger remove-action" data-remove="${escape(r.employeeId)}" title="从本月工资表移除" aria-label="从本月工资表移除 ${escape(r.name)}">${icon('trash')}</button>`}</div></td></tr>`;
+    }).join('') : '<tr class="no-results"><td colspan="8"><div class="no-results-content">'+icon('search')+'<span>没有找到匹配的员工</span><small>试试其他姓名，或切换店铺筛选。</small></div></td></tr>';
     const sum = fn => C.amount(rows.reduce((total, r) => total + fn(r), 0));
-    $('payroll-foot').innerHTML = `<tr><td>筛选合计 · ${rows.length} 人</td><td class="numeric">${sum(r=>r.base)}<small>饭贴 ${sum(r=>r.mealAllowance)}</small></td><td class="numeric">${sum(r=>r.commission)}</td><td class="numeric">${sum(r=>C.gross(r)-r.base-r.mealAllowance-r.commission)}</td><td class="numeric">${sum(r=>r.leaveDeduction)}</td><td class="numeric">${sum(r=>r.clothing)}</td><td class="numeric">${sum(r=>r.advance)}</td><td class="numeric">${sum(r=>r.depositDeduction)}</td><td class="numeric">${sum(restDeduction)}</td><td class="numeric net">${sum(C.net)}</td><td colspan="2" class="footer-disclaimer">计算参考，非发薪凭证</td></tr>`;
+    const sumCents = fn => rows.reduce((total, r) => total + fn(r), 0);
+    const dedTotals = { leaveDeduction: sumCents(r => r.leaveDeduction), clothing: sumCents(r => r.clothing), advance: sumCents(r => r.advance), depositDeduction: sumCents(r => r.depositDeduction), lateness: sumCents(r => r.lateness), deduction: sumCents(r => r.deduction), insurance: sumCents(r => r.insurance), tax: sumCents(r => r.tax) };
+    $('payroll-foot').innerHTML = `<tr><td>筛选合计 · ${rows.length} 人</td><td class="numeric">${sum(r=>r.base)}<small>饭贴 ${sum(r=>r.mealAllowance)}</small></td><td class="numeric">${sum(r=>r.commission)}</td><td class="numeric">${sum(r=>C.gross(r)-r.base-r.mealAllowance-r.commission)}</td>${deductionCell(dedTotals)}<td class="numeric net">${sum(C.net)}</td><td colspan="2" class="footer-disclaimer">计算参考，非发薪凭证</td></tr>`;
   }
   function employeeProfiles() { return state.employees.filter(e => !e.deleted); }
   function noteDraftKey(month, id) { return month + '/' + id; }
@@ -176,9 +191,11 @@
     const selected = $('shop-filter').value;
     $('shop-filter').innerHTML = options(selected, true);
     renderPayroll(); renderEmployees();
-    $('shops-inputs').innerHTML = state.shops.map(s => `<label>${escape(s.type)}店铺<input data-shop-id="${escape(s.id)}" value="${escape(s.name)}" maxlength="60" required></label>`).join('');
+    $('shops-inputs').innerHTML = state.shops.map(s => `<div class="shop-row" data-shop-row="${escape(s.id)}"><input data-shop-name value="${escape(s.name)}" maxlength="60" required placeholder="店名" ${blocked?'disabled':''}><select data-shop-type aria-label="店铺类型" ${blocked?'disabled':''}><option value="线下"${s.type==='线下'?' selected':''}>线下实体店</option><option value="线上"${s.type==='线上'?' selected':''}>线上淘宝店</option></select><button type="button" class="text-button danger" data-delete-shop="${escape(s.id)}" ${blocked?'disabled':''}>${icon('trash')}删除</button></div>`).join('');
     $('audit-list').innerHTML = state.logs.length ? state.logs.slice(0, 50).map(l => `<div class="audit-entry"><time>${escape(new Date(l.at).toLocaleString('zh-CN', {hour12: false}))}</time>${escape(l.message)}</div>`).join('') + (state.logs.length > 50 ? '<p class="muted">页面仅展示最近 50 条，完整记录包含在备份中。</p>' : '') : '<p class="muted">还没有操作记录。</p>';
     $('add-employee').disabled = blocked;
+    $('add-shop').disabled = blocked;
+    $('save-shops').disabled = blocked;
     $('clear-data').disabled = blocked;
   }
   function view(name) {
@@ -187,7 +204,7 @@
       const active=el.dataset.view===name;el.classList.toggle('active',active);
       if(active)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');
     });
-    $('breadcrumb-current').textContent=({payroll:'每月工资',employees:'员工档案',settings:'店铺与备份',guide:'使用说明'})[name]||'工作空间';
+    $('breadcrumb-current').textContent=({payroll:'每月工资',employees:'员工档案',settings:'店铺与备份',ai:'AI 查账',guide:'使用说明'})[name]||'工作空间';
     window.scrollTo(0,0);
   }
   function openEmployee(id) {
@@ -235,7 +252,7 @@
       if (row?.source) $('salary-comparison').textContent = row.source.recordedNet === null ? '原表实发：未填写（不是 0 元）。软件金额只是按目前项目计算，请向公司核实缺项。' : '原表实发：'+C.amount(row.source.recordedNet)+' 元；软件减原表：'+C.amount(result-row.source.recordedNet)+' 元。原表金额只读，不会被修改。';
     } catch (_) { $('salary-preview').textContent = '请检查金额或天数'; }
   }
-  function commissionMode() { const checked = document.querySelector('input[name="commission-mode"]:checked'); return checked ? checked.value : 'percent'; }
+  function commissionMode() { const checked = document.querySelector('input[name="commission-mode"]:checked'); return checked ? checked.value : 'fixed'; }
   function commissionExpression() {
     const num = id => document.getElementById(id).value.trim();
     const mode = commissionMode();
@@ -258,8 +275,9 @@
     document.querySelectorAll('[data-commission-panel]').forEach(panel => panel.hidden = panel.dataset.commissionPanel !== mode);
   }
   function resetCommission() {
-    const percent = document.querySelector('input[name="commission-mode"][value="percent"]'); if (percent) percent.checked = true;
-    ['commission-base','commission-rate','commission-fixed','commission-units','commission-unit-price'].forEach(id => document.getElementById(id).value = '');
+    const fixed = document.querySelector('input[name="commission-mode"][value="fixed"]'); if (fixed) fixed.checked = true;
+    ['commission-base','commission-rate','commission-units','commission-unit-price'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('commission-fixed').value = $('salary-commission').value;
     document.getElementById('commission-formula').value = '';
     commissionPanel(); renderCommission();
   }
@@ -319,10 +337,16 @@
     return JSON.stringify({app:'clothing-payroll-backup', encrypted:true, v:1, kdf:'PBKDF2-SHA256', iterations:200000, salt:bytesToBase64(salt), iv:bytesToBase64(iv), data:bytesToBase64(new Uint8Array(ct))});
   }
   async function decryptBackup(payload, password) {
+    const iterations = payload.iterations;
+    if (!Number.isSafeInteger(iterations) || iterations < 10000 || iterations > 500000) throw new Error('备份文件的密码校验参数不正确，请确认文件完整');
+    let salt, iv, data;
+    try { salt = base64ToBytes(payload.salt); iv = base64ToBytes(payload.iv); data = base64ToBytes(payload.data); }
+    catch (_) { throw new Error('备份文件格式不正确，无法恢复'); }
+    if (salt.length < 8 || iv.length !== 12) throw new Error('备份文件格式不正确，无法恢复');
     const keyMaterial = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
-    const key = await crypto.subtle.deriveKey({name:'PBKDF2', salt:base64ToBytes(payload.salt), iterations:payload.iterations || 200000, hash:'SHA-256'}, keyMaterial, {name:'AES-GCM', length:256}, false, ['decrypt']);
+    const key = await crypto.subtle.deriveKey({name:'PBKDF2', salt, iterations, hash:'SHA-256'}, keyMaterial, {name:'AES-GCM', length:256}, false, ['decrypt']);
     try {
-      const pt = await crypto.subtle.decrypt({name:'AES-GCM', iv:base64ToBytes(payload.iv)}, key, base64ToBytes(payload.data));
+      const pt = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, data);
       return new TextDecoder().decode(pt);
     } catch (_) { throw new Error('密码不正确，或备份文件已损坏'); }
   }
@@ -529,6 +553,14 @@
       noteStatus();
       toast('员工档案已删除；已生成工资全部保留');
     }
+    if (button.dataset.deleteShop) {
+      if (blocked) throw new Error('当前暂停写入，请先处理顶部提示');
+      const shop = state.shops.find(s => s.id === button.dataset.deleteShop);
+      if (!shop) throw new Error('店铺不存在或已删除');
+      if (!confirm('删除店铺“' + shop.name + '”？\n\n只有没有在职员工或工资记录引用的店铺才能删除；已有记录的店铺会被阻止，请先把相关人员调整到其他店。删除不能直接撤销。')) return;
+      commit(s => C.deleteShop(s, button.dataset.deleteShop));
+      toast('店铺已删除');
+    }
     if (button.dataset.editSalary) openSalary(button.dataset.editSalary);
     if (button.dataset.slip) openSlip(button.dataset.slip);
     if (button.dataset.remove) {
@@ -539,6 +571,10 @@
     }
   }));
   $('add-employee').addEventListener('click', safe(() => openEmployee()));
+  $('add-shop').addEventListener('click', safe(() => {
+    commit(s => C.addShop(s, '新店铺', '线下'));
+    toast('已添加新店铺，请修改店名和类型后点“保存店名”');
+  }));
   $('empty-add').addEventListener('click', safe(() => employeeProfiles().length ? view('employees') : openEmployee()));
   $('open-demo').addEventListener('click', () => window.open('工资助手.html?demo=1', '_blank', 'noopener'));
   $('month').addEventListener('change', safe(() => {monthKey(); renderPayroll();}));
@@ -573,10 +609,11 @@
   $('slip-print').addEventListener('click', () => window.print());
   $('shops-form').addEventListener('submit', safe(event => {
     event.preventDefault();
-    const values = Array.from($('shops-inputs').querySelectorAll('input'), el => ({id:el.dataset.shopId, name:el.value.trim()}));
-    if (new Set(values.map(v => v.name)).size !== values.length) throw new Error('四家店铺名称不能重复');
-    if (!confirm('店名修改后，历史工资会按相同店铺编号显示新店名。确定保存吗？')) return;
-    commit(s => {const before = s.shops.map(shop => shop.name).join('、'); values.forEach(v => s.shops.find(shop => shop.id === v.id).name = v.name); C.log(s, '店名从 ' + before + ' 改为 ' + values.map(v => v.name).join('、'));}); toast('店名已保存');
+    const values = Array.from($('shops-inputs').querySelectorAll('[data-shop-row]'), row => ({id: row.dataset.shopRow, name: row.querySelector('[data-shop-name]').value.trim(), type: row.querySelector('[data-shop-type]').value}));
+    if (values.some(v => !v.name)) throw new Error('店铺名称不能为空');
+    if (new Set(values.map(v => v.name)).size !== values.length) throw new Error('店铺名称不能重复');
+    if (!confirm('店名或类型修改后，历史工资会按相同店铺编号显示新店名。确定保存吗？')) return;
+    commit(s => {const before = s.shops.map(shop => shop.name).join('、'); values.forEach(v => {const shop = s.shops.find(sh => sh.id === v.id); shop.name = v.name; shop.type = v.type;}); C.log(s, '店铺从 ' + before + ' 改为 ' + values.map(v => v.name).join('、'));}); toast('店铺已保存');
   }));
   $('backup').addEventListener('click', safe(async () => {
     const plaintext = blocked && raw !== null ? raw : JSON.stringify(state, null, 2);
@@ -650,7 +687,7 @@
       if (blocked) return;
       try {
         const text = await window.desktop.loadData();
-        if (!text) return;
+        if (!text || raw !== null) return;
         const restored = C.upgrade(JSON.parse(text));
         const serialized = JSON.stringify(restored);
         localStorage.setItem(key, serialized);
@@ -662,5 +699,108 @@
         $('save-status').textContent = '已从本机数据文件恢复';
       } catch (_) { /* 镜像文件损坏时忽略，不影响启动 */ }
     })();
+  }
+
+  // ---- AI 查账 ----
+  const AI = window.PayrollAI;
+  const AI_KEY = 'yizhang-ai-key';
+  if (AI) {
+    $('ai-key').value = localStorage.getItem(AI_KEY) || '';
+    $('ai-key-status').textContent = $('ai-key').value ? '已保存（仅存本机，不进入备份）。' : '未设置。到 platform.deepseek.com 创建 API Key 后粘贴到这里。';
+    $('ai-save-key').addEventListener('click', safe(() => {
+      const k = $('ai-key').value.trim();
+      if (!k) { localStorage.removeItem(AI_KEY); $('ai-key-status').textContent = '已清除。'; toast('已清除 API Key'); return; }
+      if (!/^sk-[A-Za-z0-9]{8,}$/.test(k)) { toast('Key 格式看起来不对（应以 sk- 开头）'); return; }
+      localStorage.setItem(AI_KEY, k);
+      $('ai-key-status').textContent = '已保存（仅存本机，不进入备份）。';
+      toast('API Key 已保存');
+    }));
+    let aiMessages = [];
+    function aiEmptyHTML() {
+      return '<div class="ai-empty"><div class="ai-empty-mark">' + icon('shirt') + '<span>AI 查账</span></div><p>可以直接问我工资问题：</p><div class="ai-examples">' +
+        ['11月各店应发多少', '这个月提成最高的是谁', '谁有请假但没扣款', '哪些人还没核实', '把张三这个月提成改成2500']
+          .map(t => '<button class="ai-chip" data-ai-example="' + escape(t) + '">' + escape(t) + '</button>').join('') +
+        '</div><p class="muted ai-empty-note">金额只在本机计算、不会上传；员工姓名和店铺名会发送给 DeepSeek 用于理解问题。修改建议需要你确认后才写入。</p></div>';
+    }
+    function renderAIChat() {
+      const box = $('ai-chat');
+      if (!aiMessages.length) { box.innerHTML = aiEmptyHTML(); return; }
+      box.innerHTML = aiMessages.map((m, i) => {
+        if (m.role === 'user') return '<div class="ai-msg user"><div class="ai-bubble">' + escape(m.text) + '</div></div>';
+        if (m.pending) return '<div class="ai-msg ai"><span class="ai-avatar"></span><div class="ai-bubble ai-pending"><span class="ai-dot"></span><span class="ai-dot"></span><span class="ai-dot"></span></div></div>';
+        if (m.suggest) {
+          const items = m.suggest.actions.map(a =>
+            '<div class="ai-confirm-item"><span>' + escape(a.name) + ' · ' + escape(a.month) + ' · ' + escape(C.labels[a.field] || a.field) + '</span><span>改为 <strong>' + C.amount(a.to) + '</strong> 元</span></div>'
+          ).join('');
+          const footer = m.applied
+            ? '<div class="ai-applied">✓ 已修改 ' + m.suggest.actions.length + ' 人，请到“每月工资”重新核对</div>'
+            : '<div class="ai-suggest-actions"><button type="button" class="button primary" data-ai-apply="' + i + '">确认修改</button><button type="button" class="button" data-ai-dismiss="' + i + '">取消</button></div>';
+          return '<div class="ai-msg ai"><span class="ai-avatar"></span><div class="ai-bubble">' + escape(m.suggest.title) + '<div class="ai-confirm-list">' + items + '</div>' + footer + '</div></div>';
+        }
+        return '<div class="ai-msg ai"><span class="ai-avatar"></span><div class="ai-bubble' + (m.error ? ' ai-error' : '') + '">' + escape(m.text) + '</div></div>';
+      }).join('');
+      box.scrollTop = box.scrollHeight;
+    }
+    async function askAI() {
+      const question = $('ai-question').value.trim();
+      if (!question) { toast('请先输入问题'); return; }
+      const apiKey = $('ai-key').value.trim();
+      if (!apiKey) { toast('请先在顶部填写并保存 DeepSeek API Key'); return; }
+      $('ai-question').value = '';
+      aiMessages.push({ role: 'user', text: question });
+      aiMessages.push({ role: 'ai', pending: true });
+      renderAIChat();
+      $('ai-ask').disabled = true;
+      try {
+        const ctx = AI.buildContext(state);
+        const reply = await AI.chat(apiKey, question, ctx);
+        const query = AI.parseQuery(reply);
+        const result = AI.executeQuery(query, state);
+        aiMessages.pop();
+        if (result && result.suggest === true) aiMessages.push({ role: 'ai', suggest: result, applied: false });
+        else aiMessages.push({ role: 'ai', text: String(result) });
+      } catch (error) {
+        aiMessages.pop();
+        aiMessages.push({ role: 'ai', text: error.message, error: true });
+      } finally {
+        $('ai-ask').disabled = false;
+        renderAIChat();
+      }
+    }
+    $('ai-chat').addEventListener('click', safe(event => {
+      const btn = event.target.closest('[data-ai-apply],[data-ai-dismiss]');
+      if (!btn) return;
+      const i = Number(btn.dataset.aiApply ?? btn.dataset.aiDismiss);
+      const m = aiMessages[i];
+      if (!m || !m.suggest || m.applied) return;
+      if (btn.dataset.aiDismiss !== undefined) { aiMessages.splice(i, 1); renderAIChat(); return; }
+      try {
+        commit(s => {
+          m.suggest.actions.forEach(a => {
+            const month = s.months[a.month];
+            if (!month || month.locked) throw new Error(a.month + ' 已锁账或没有工资记录，不能修改');
+            const row = month.rows.find(r => r.employeeId === a.employeeId);
+            if (!row) throw new Error('找不到 ' + a.name + ' ' + a.month + ' 的工资记录，未修改');
+            row[a.field] = a.to;
+            row.review = { confirmed: false, reason: '', at: '' };
+          });
+          C.log(s, 'AI 建议修改 ' + m.suggest.actions.length + ' 人的工资（' + m.suggest.actions.map(a => a.name + ':' + C.labels[a.field]).join('、') + '）');
+        });
+        m.applied = true;
+        toast('已按 AI 建议修改工资，请重新核对');
+      } catch (e) {
+        toast('修改失败：' + e.message);
+      }
+      renderAIChat();
+    }));
+    $('ai-ask').addEventListener('click', safe(askAI));
+    $('ai-question').addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); safe(askAI)(); } });
+    $('ai-chat').addEventListener('click', safe(event => {
+      const chip = event.target.closest('[data-ai-example]');
+      if (!chip) return;
+      $('ai-question').value = chip.dataset.aiExample;
+      askAI();
+    }));
+    renderAIChat();
   }
 })();

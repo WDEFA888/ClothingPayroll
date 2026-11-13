@@ -8,6 +8,7 @@ const appFile = path.join(__dirname, '工资助手.html');
 const appPath = decodeURIComponent(new URL(pathToFileURL(appFile).href).pathname);
 const MAX_SAVE = 50 * 1024 * 1024;
 const MAX_DATA = 50 * 1024 * 1024;
+const AI_ENDPOINT = 'https://api.deepseek.com/chat/completions';
 
 function dataFile() {
   return path.join(app.getPath('userData'), '工资数据.json');
@@ -30,7 +31,7 @@ function createWindow(demo) {
     minHeight: 560,
     backgroundColor: '#f4f5f4',
     autoHideMenuBar: true,
-    title: '衣账 · 四店工资助手',
+    title: '衣账 · 多店工资助手',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -88,6 +89,36 @@ ipcMain.handle('save-data', (event, text) => {
   if (text === '') { try { fs.unlinkSync(dataFile()); } catch (_) {} return true; }
   fs.writeFileSync(dataFile(), text, 'utf8');
   return true;
+});
+
+ipcMain.handle('ai-chat', async (event, payload) => {
+  const senderUrl = event.senderFrame?.url || event.sender.getURL();
+  if (!isAppUrl(senderUrl)) throw new Error('拒绝来自未知页面的 AI 请求');
+  const apiKey = String((payload && payload.apiKey) || '').trim();
+  const messages = payload && payload.messages;
+  if (!apiKey) throw new Error('未填写 DeepSeek API Key');
+  if (!Array.isArray(messages) || !messages.length) throw new Error('AI 请求内容为空');
+  if (messages.some(m => !m || typeof m.role !== 'string' || typeof m.content !== 'string')) throw new Error('AI 请求格式不正确');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+  try {
+    const res = await fetch(AI_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+      body: JSON.stringify({ model: 'deepseek-chat', messages, temperature: 0, stream: false }),
+      signal: controller.signal
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error('AI 接口错误（' + res.status + '）：' + text.slice(0, 200));
+    }
+    const data = await res.json();
+    const content = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if (typeof content !== 'string') throw new Error('AI 返回内容为空');
+    return content;
+  } finally {
+    clearTimeout(timer);
+  }
 });
 
 ipcMain.handle('save-file', async (event, payload) => {
