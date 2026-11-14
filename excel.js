@@ -190,17 +190,18 @@
       ['_rels/.rels','<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
       ['xl/workbook.xml',`<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="${NS}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((s,i)=>`<sheet name="${escapeXml(s.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets></workbook>`],
       ['xl/_rels/workbook.xml.rels',`<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`],
-      ['xl/styles.xml',`<?xml version="1.0"?><styleSheet xmlns="${NS}"><fonts count="4"><font><sz val="11"/><name val="等线"/></font><font><sz val="24"/><color rgb="FF000000"/><name val="等线"/></font><font><sz val="9"/><name val="楷体"/></font><font><sz val="9"/><color rgb="FF000000"/><name val="等线"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="5"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top/><bottom style="medium"><color rgb="FF000000"/></bottom><diagonal/></border><border><left style="thin"><color rgb="FF000000"/></left><right style="thin"><color rgb="FF000000"/></right><top style="medium"><color rgb="FF000000"/></top><bottom style="thin"><color rgb="FF000000"/></bottom><diagonal/></border><border><left style="thin"><color rgb="FF000000"/></left><right style="thin"><color rgb="FF000000"/></right><top/><bottom style="thin"><color rgb="FF000000"/></bottom><diagonal/></border><border><left style="thin"><color rgb="FF000000"/></left><right style="thin"><color rgb="FF000000"/></right><top/><bottom style="medium"><color rgb="FF000000"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="2" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="3" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="3" fillId="0" borderId="4" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="3" fillId="0" borderId="4" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`]];
+      ['xl/styles.xml',`<?xml version="1.0"?><styleSheet xmlns="${NS}"><fonts count="4"><font><sz val="11"/><name val="等线"/></font><font><sz val="24"/><color rgb="FF000000"/><name val="等线"/></font><font><sz val="9"/><name val="楷体"/></font><font><sz val="9"/><color rgb="FF000000"/><name val="等线"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="16"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top/><bottom style="medium"><color rgb="FF000000"/></bottom><diagonal/></border><border><left style="medium"><color rgb="FF000000"/></left><right style="thin"><color rgb="FF000000"/></right><top style="medium"><color rgb="FF000000"/></top><bottom/><diagonal/></border><border><left style="thin"><color rgb="FF000000"/></left><right style="thin"><color rgb="FF000000"/></right><top style="medium"><color rgb="FF000000"/></top><bottom/><diagonal/></border><border><left style="thin"><color rgb="FF000000"/></left><right/><top style="medium"><color rgb="FF000000"/></top><bottom style="thin"><color rgb="FF000000"/></bottom><diagonal/></border><border><left/><right/><top style="medium"><color rgb="FF000000"/></top><bottom style="thin"><color rgb="FF000000"/></bottom><diagonal/></border><border><left/><right style="thin"><color rgb="FF000000"/></right><top style="medium"><color rgb="FF000000"/></top><bottom style="thin"><color rgb="FF000000"/></bottom><diagonal/></border><border><left style="thin"><color rgb="FF000000"/></left><right style="thin"><color rgb="FF000000"/></right><top style="medium"><color rgb="FF000000"/></top><bottom style="thin"><color rgb="FF000000"/></bottom><diagonal/></border><border><left style="thin"><color rgb="FF000000"/></left><right style="medium"><color rgb="FF000000"/></right><top style="medium"><color rgb="FF000000"/></top><bottom/><diagonal/></border><border><left style="medium"><color rgb="FF000000"/></left><right style="thin"><color rgb="FF000000"/></right><top/><bottom style="thin"><color rgb="FF000000"/></bottom><diagonal/></border><border><left style="thin"><color rgb="FF000000"/></left><right style="thin"><color rgb="FF000000"/></right><top/><bottom style="thin"><color rgb="FF000000"/></bottom><diagonal/></border><border><left style="thin"><color rgb="FF000000"/></left><right style="thin"><color rgb="FF000000"/></right><top style="thin"><color rgb="FF000000"/></top><bottom style="thin"><color rgb="FF000000"/></bottom><diagonal/></border><border><left style="thin"><color rgb="FF000000"/></left><right style="medium"><color rgb="FF000000"/></right><top/><bottom style="thin"><color rgb="FF000000"/></bottom><diagonal/></border><border><left style="medium"><color rgb="FF000000"/></left><right style="thin"><color rgb="FF000000"/></right><top style="thin"><color rgb="FF000000"/></top><bottom style="medium"><color rgb="FF000000"/></bottom><diagonal/></border><border><left style="thin"><color rgb="FF000000"/></left><right style="thin"><color rgb="FF000000"/></right><top style="thin"><color rgb="FF000000"/></top><bottom style="medium"><color rgb="FF000000"/></bottom><diagonal/></border><border><left style="thin"><color rgb="FF000000"/></left><right style="medium"><color rgb="FF000000"/></right><top style="thin"><color rgb="FF000000"/></top><bottom style="medium"><color rgb="FF000000"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="18"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="2" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="3" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="4" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="5" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="6" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="7" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="8" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="9" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="10" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="11" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="12" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="3" fillId="0" borderId="13" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="3" fillId="0" borderId="14" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="3" fillId="0" borderId="14" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="3" fillId="0" borderId="14" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="3" fillId="0" borderId="15" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`]];
     sheets.forEach((sheet,i)=>files.push(['xl/worksheets/sheet'+(i+1)+'.xml',sheetXml(sheet)]));return pack(files);
   }
   function payrollWorkbook(rows, month, shopName, locked) {
-    const money = value => ({ v: value / 100, s: 4 });
-    const text = value => ({ v: value, s: 4 });
-    const monthText = month.slice(0, 4) + '年' + Number(month.slice(5)) + '月';
+    const money = value => ({ v: value / 100, s: 16 });
+    const monthNum = Number(month.slice(5));
+    const title = (shopName ? shopName + ' ' : '') + monthNum + '月工资';
+    const dateText = month.slice(0, 4) + '年' + monthNum + '月';
     const slips = [], merges = [], rowHeights = {};
-    // 大标题（24 号大字，下边一条粗线）
-    slips.push(Array(14).fill().map((_, j) => j === 0 ? { v: monthText + '工资', s: 1 } : { v: '', s: 1 }));
-    merges.push('A1:N1');
+    // 大标题（24 号大字，居中在 D:M，下边一条粗线）
+    slips.push(Array.from({length: 14}, (_, j) => j === 3 ? { v: title, s: 1 } : { v: '', s: (j >= 3 && j <= 12) ? 1 : 0 }));
+    merges.push('D1:M1');
     rowHeights[1] = 30.5;
     rows.forEach((r, i) => {
       const start = slips.length + 1; // 表头行
@@ -210,25 +211,60 @@
       const hLabel = r.housingAllowance > 0 ? '房贴' : '奖金';
       const jKey = r.lateness > 0 ? 'lateness' : 'clothing';
       const jLabel = r.lateness > 0 ? '迟到' : '买衣服';
-      const listed = ['base', 'mealAllowance', gKey, hKey, 'leaveDeduction', jKey, 'advance', 'depositDeduction'];
-      const yuan = cents => (cents / 100).toFixed(2).replace(/\.?0+$/, '');
-      const extra = C.fields.filter(f => !listed.includes(f) && r[f] > 0).map(f => C.labels[f] + ' ' + yuan(r[f])).join('；');
-      const note = (r.note || '') + (extra ? (r.note ? '；' : '') + extra : '');
-      // 表头两行（楷体 9 号，块顶粗线）
-      slips.push(['编号', '日期', '姓名', '请假天数', '应发工资', '', '', '', '扣款项目', '', '', '', '实发金额', '备注'].map(v => ({ v, s: 2 })));
-      slips.push(['', '', '', '', '基本工资', '饭贴', gLabel, hLabel, '扣请假', jLabel, '预支工资', '员工押金', '', ''].map(v => ({ v, s: 3 })));
+      // 备注列只显示手写的工资备注；未单列项目不再自动写进备注
+      const note = r.note || '';
+      // 表头两行（楷体 9 号；编号/日期/姓名/请假天数/实发/备注跨两行，块顶与左右外框为粗线）
+      slips.push([
+        { v: '编号', s: 2 }, { v: '日期', s: 3 }, { v: '姓名', s: 3 }, { v: '请假天数', s: 3 },
+        { v: '应发工资', s: 4 }, { v: '', s: 5 }, { v: '', s: 6 }, { v: '', s: 7 },
+        { v: '扣款项目', s: 4 }, { v: '', s: 5 }, { v: '', s: 5 }, { v: '', s: 6 },
+        { v: '实发金额', s: 3 }, { v: '备注', s: 8 }
+      ]);
+      slips.push([
+        { v: '', s: 9 }, { v: '', s: 10 }, { v: '', s: 10 }, { v: '', s: 10 },
+        { v: '基本工资', s: 11 }, { v: '饭贴', s: 11 }, { v: gLabel, s: 11 }, { v: hLabel, s: 11 },
+        { v: '扣请假', s: 11 }, { v: jLabel, s: 11 }, { v: '预支工资', s: 11 }, { v: '员工押金', s: 11 },
+        { v: '', s: 10 }, { v: '', s: 12 }
+      ]);
       // 数据行（等线 9 号，块底粗线；备注左对齐）
-      slips.push([{ v: i + 1, s: 4 }, text(monthText), text(r.name), r.leaveDays > 0 ? { v: r.leaveDays / 100, s: 4 } : { v: '', s: 4 }, money(r.base), money(r.mealAllowance), money(r[gKey]), money(r[hKey]), money(r.leaveDeduction), money(r[jKey]), money(r.advance), money(r.depositDeduction), money(C.net(r)), { v: note, s: 5 }]);
+      slips.push([
+        { v: i + 1, s: 13 }, { v: dateText, s: 14 }, { v: r.name, s: 14 },
+        r.leaveDays > 0 ? { v: r.leaveDays / 100, s: 15 } : { v: '', s: 15 },
+        money(r.base), money(r.mealAllowance), money(r[gKey]), money(r[hKey]),
+        money(r.leaveDeduction), money(r[jKey]), money(r.advance), money(r.depositDeduction),
+        money(C.net(r)), { v: note, s: 17 }
+      ]);
       rowHeights[start + 2] = 23.5;
       slips.push([]);
       merges.push(
         'E' + start + ':G' + start, 'I' + start + ':L' + start,
-        'A' + (start + 2) + ':A' + (start + 3), 'B' + (start + 2) + ':B' + (start + 3),
-        'C' + (start + 2) + ':C' + (start + 3), 'D' + (start + 2) + ':D' + (start + 3),
-        'M' + (start + 2) + ':M' + (start + 3), 'N' + (start + 2) + ':N' + (start + 3)
+        'A' + start + ':A' + (start + 1), 'B' + start + ':B' + (start + 1),
+        'C' + start + ':C' + (start + 1), 'D' + start + ':D' + (start + 1),
+        'M' + start + ':M' + (start + 1), 'N' + start + ':N' + (start + 1)
       );
     });
     return writeWorkbook([{ name: '工资单', rows: slips, merges, rowHeights, widths: [6, 12, 10, 9, 10, 10, 10, 10, 10, 10, 10, 10, 11, 24] }]);
   }
-  return {read,writeWorkbook,payrollWorkbook,crc32};
+  function annualWorkbook(rows, title) {
+    // 年度汇总：平铺表，每人每月一行
+    const header = ['月份', '姓名', '岗位', '店铺', '基本工资', '饭贴', '提成', '奖金', '其他应发', '应发合计', '扣款合计', '实发金额'];
+    const money = v => ({ v: v / 100, s: 3 });
+    const text = v => ({ v, s: 2 });
+    const sheetRows = [header.map(v => ({ v, s: 1 }))];
+    rows.forEach(r => {
+      const other = r.gross - r.base - r.mealAllowance - r.commission - r.bonus;
+      sheetRows.push([text(r.month), text(r.name), text(r.role || ''), text(r.shopName), money(r.base), money(r.mealAllowance), money(r.commission), money(r.bonus), money(other), money(r.gross), money(r.deductions), money(r.net)]);
+    });
+    const styles = `<?xml version="1.0"?><styleSheet xmlns="${NS}"><fonts count="2"><font><sz val="11"/><name val="等线"/></font><font><sz val="11"/><b/><color rgb="FF000000"/><name val="等线"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FF000000"/></left><right style="thin"><color rgb="FF000000"/></right><top style="thin"><color rgb="FF000000"/></top><bottom style="thin"><color rgb="FF000000"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+    const files = [
+      ['[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'],
+      ['_rels/.rels', '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
+      ['xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="${NS}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${escapeXml(title)}" sheetId="1" r:id="rId1"/></sheets></workbook>`],
+      ['xl/_rels/workbook.xml.rels', '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
+      ['xl/styles.xml', styles],
+      ['xl/worksheets/sheet1.xml', sheetXml({ name: title, rows: sheetRows, widths: [10, 10, 12, 14, 11, 9, 10, 9, 11, 11, 11, 11] })]
+    ];
+    return pack(files);
+  }
+  return {read,writeWorkbook,payrollWorkbook,annualWorkbook,crc32};
 });

@@ -112,6 +112,43 @@ textarea { resize: vertical; line-height: 1.7; }
 .summary-item.emphasis { background: var(--accent-soft); }
 .summary-item.emphasis .summary-label { color: #3f5c4b; }
 .summary-item.emphasis .summary-value strong { color: #1f4a33; }
+.profit-stats { margin-bottom: 16px; }
+.profit-editor { margin-bottom: 12px; }
+.profit-preview-row { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--secondary); font-size: 12px; }
+.profit-preview-row .profit-preview-label { margin-left: 14px; }
+.profit-preview-row strong { font-variant-numeric: tabular-nums; }
+.profit-chart-box { width: 100%; overflow-x: auto; }
+.profit-chart-box svg { display: block; width: 100%; min-width: 480px; height: auto; }
+.profit-grid { stroke: var(--line); stroke-width: 1; }
+.profit-zero { stroke: var(--line-strong); stroke-width: 1; stroke-dasharray: 4 4; }
+.profit-area { fill: var(--accent-soft); }
+.profit-line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.profit-dot { fill: var(--accent); stroke: var(--paper); stroke-width: 1.5; }
+.profit-axis-label, .profit-x-label { fill: var(--muted); font-size: 11px; }
+.profit-value-label { fill: var(--accent); font-size: 10px; font-weight: 600; }
+.profit-table td.numeric { font-variant-numeric: tabular-nums; }
+.todo-banner { margin-bottom: 12px; padding: 10px 14px; border: 1px solid var(--warning); border-radius: var(--radius); background: var(--warning-bg); }
+.todo-title { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; color: var(--warning); font-size: 12px; }
+.todo-title .icon { width: 15px; height: 15px; }
+.todo-list { margin: 0; padding-left: 20px; }
+.todo-list li { font-size: 12px; line-height: 1.8; }
+.todo-list .todo-warn { color: var(--danger); }
+.todo-list .todo-info { color: var(--secondary); }
+.ratio-high { color: var(--danger); font-weight: 600; }
+.ratio-mid { color: var(--warning); font-weight: 600; }
+.history-chart-box { width: 100%; overflow-x: auto; margin-bottom: 12px; }
+.history-chart-box svg { display: block; width: 100%; min-width: 480px; height: auto; }
+.confirm-cell { text-align: center; }
+.confirm-check { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; color: var(--secondary); font-size: 12px; white-space: nowrap; }
+.confirm-check input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+.confirm-check input:disabled { cursor: not-allowed; }
+.footer-confirm { text-align: center; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.contact-cell span, .contact-cell small { display: block; }
+.contact-cell small { color: var(--muted); font-size: 11px; }
+@media (max-width: 760px) {
+  .profit-editor { grid-template-columns: minmax(0,1fr); }
+  .profit-preview-row .profit-preview-label { margin-left: 0; }
+}
 .notice { display: flex; align-items: flex-start; gap: 7px; margin-bottom: 12px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 4px; background: #f7f8f7; color: var(--muted); font-size: 11px; line-height: 1.75; }
 .notice > span { display: flex; margin-top: 1px; }
 .notice .icon { width: 13px; height: 13px; }
@@ -289,7 +326,7 @@ legend { padding: 0 5px; color: var(--secondary); font-size: 11px; }
 .commission-mode-choice:last-child span { border-radius: 0 4px 4px 0; }
 .commission-mode-choice input:checked + span { background: var(--accent-soft); border-color: var(--accent); color: #1f4a33; font-weight: 600; }
 .commission-mode-choice input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: -2px; }
-.commission-panel { display: flex; align-items: flex-end; gap: 8px; }
+.commission-panel { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
 .commission-panel > label { display: flex; flex: 1; flex-direction: column; gap: 5px; min-width: 0; color: var(--secondary); font-size: 12px; }
 .commission-panel textarea { min-height: 52px; }
 .commission-op { align-self: center; padding-bottom: 5px; color: var(--secondary); font-size: 16px; font-weight: 600; }

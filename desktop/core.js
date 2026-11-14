@@ -36,7 +36,8 @@
     // 仅支持数字与 + - × ÷ % 括号的算式；用整数分数精确计算，返回整数分，不执行任何脚本。
     if (String(input).length > 500) throw new Error('算式过长，请简化后再试');
     const s = String(input)
-      .replace(/[×＋－÷％（）]/g, c => ({'×':'*','＋':'+','－':'-','÷':'/','％':'%','（':'(','）':')'}[c]))
+      .replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+      .replace(/[×÷]/g, c => (c === '×' ? '*' : '/'))
       .replace(/[，,]/g, '')
       .replace(/[\s　]/g, '');
     if (!s) throw new Error('请先填写提成算式');
@@ -88,7 +89,7 @@
   function net(row) { return gross(row) - deductions(row); }
   function blankAmounts() { return Object.fromEntries(fields.map(f => [f, 0])); }
   function newState() {
-    return {app: 'clothing-payroll', version: 2, employees: [], months: {}, employeeNotes: {}, logs: [], shops: [
+    return {app: 'clothing-payroll', version: 2, employees: [], months: {}, employeeNotes: {}, profits: {}, logs: [], shops: [
       {id: 'offline-a', name: '上海实体店 A', type: '线下'}, {id: 'offline-b', name: '上海实体店 B', type: '线下'},
       {id: 'taobao-a', name: '淘宝店 A', type: '线上'}, {id: 'taobao-b', name: '淘宝店 B', type: '线上'}]};
   }
@@ -119,6 +120,7 @@
   function validate(state) {
     assert(state && state.app === 'clothing-payroll' && state.version === 2, '不是本软件支持的备份文件');
     noDanger(state, '备份');
+    if (state.profits === undefined) state.profits = {};
     assert(Array.isArray(state.shops) && state.shops.length >= 1 && state.shops.length <= 100, '店铺数量不正确');
     const shops = new Set([UNASSIGNED]);
     const shopNames = new Set();
@@ -140,6 +142,8 @@
       assert(e.deleted === undefined || typeof e.deleted === 'boolean', '员工删除标记不正确');
       assert(!e.deleted || !e.active, '已删除员工不能标记为在职');
       assert(centsValid(e.base), '员工底薪不正确');
+      if (e.phone !== undefined) text(e.phone, 30, '手机号');
+      if (e.wechat !== undefined) text(e.wechat, 60, '微信号');
     });
     assert(state.months && typeof state.months === 'object' && !Array.isArray(state.months) && Object.keys(state.months).length <= 1200, '月份数据不正确');
     Object.entries(state.months).forEach(([key, month]) => {
@@ -163,6 +167,13 @@
           assert(!r.review.confirmed || r.review.reason.trim().length >= 2, '确认核实需要填写说明');
         }
       });
+    });
+    assert(state.profits && typeof state.profits === 'object' && !Array.isArray(state.profits) && Object.keys(state.profits).length <= 1200, '盈利数据格式不正确');
+    Object.entries(state.profits).forEach(([month, p]) => {
+      assert(monthValid(month), '盈利数据月份不正确');
+      noDanger(p, '盈利记录');
+      assert(centsValid(p.revenue) && centsValid(p.goodsCost) && centsValid(p.otherCost), '盈利金额不正确');
+      text(p.note, 200, '盈利备注');
     });
     if (state.employeeNotes !== undefined) {
       assert(state.employeeNotes && typeof state.employeeNotes === 'object' && !Array.isArray(state.employeeNotes) && Object.keys(state.employeeNotes).length <= 1200, '员工月度备注格式不正确');
@@ -279,8 +290,26 @@
     assert(month.locked !== locked, '锁账状态未发生变化');
     assert(locked || (typeof reason === 'string' && reason.trim().length >= 2), '解锁需要填写至少两个字的原因');
     assert(!reason || reason.length <= 500, '解锁原因过长');
-    if (locked) assert(!month.rows.some(pending), '仍有店铺未分配或工资差异/缺项未核实，请逐人处理后再锁账');
+    if (locked) {
+      assert(!month.rows.some(pending), '仍有店铺未分配或工资差异/缺项未核实，请逐人处理后再锁账');
+      assert(month.rows.every(r => r.review && r.review.confirmed), '还有员工未点“确认”，请逐人确认工资无误后再锁账');
+    }
     month.locked = locked; log(state, monthKey + (locked ? ' 已审核锁账' : ' 解锁，原因：' + reason.trim()));
+  }
+  function setConfirmed(state, monthKey, employeeId, confirmed) {
+    const month = state.months[monthKey];
+    assert(month && !month.locked, '本月已锁账或尚未生成工资表，不能修改确认状态');
+    const row = month.rows.find(r => r.employeeId === employeeId);
+    assert(row, '员工工资记录不存在');
+    if (confirmed === !!row.review?.confirmed) return false;
+    if (confirmed) {
+      row.review = {confirmed: true, reason: (row.review?.reason || '').trim() || '老板已确认', at: new Date().toISOString()};
+      log(state, monthKey + ' 确认 ' + row.name + ' 工资与信息无误');
+    } else {
+      row.review = {confirmed: false, reason: '', at: ''};
+      log(state, monthKey + ' 取消确认 ' + row.name + ' 工资无误');
+    }
+    return true;
   }
   function applyImport(state, batch, options) {
     const monthKey = options.month;
@@ -303,7 +332,7 @@
       if (selection.employeeId) { employee = state.employees.find(e => e.id === selection.employeeId && !e.deleted); assert(employee, '选中的员工档案不存在或已删除'); }
       else {
         employee = {id: crypto.randomUUID(), name: incoming.name, role: '', shopId: options.shopId,
-          serviceShopIds: options.shopId === UNASSIGNED ? [] : [options.shopId], base: incoming.base, active: true, startMonth: monthKey};
+          serviceShopIds: options.shopId === UNASSIGNED ? [] : [options.shopId], base: incoming.base, active: true, startMonth: monthKey, phone: '', wechat: ''};
         state.employees.push(employee);
       }
       assert(!ids.has(employee.id), '所选员工在 ' + monthKey + ' 已有工资，未覆盖任何记录。请取消该行或重新选择员工');
@@ -323,11 +352,54 @@
     Object.assign(state, next);
     return count;
   }
+  function monthPayroll(state, monthKey) { return (state.months[monthKey]?.rows || []).reduce((total, row) => total + net(row), 0); }
+  function profitRows(state) {
+    return Object.keys(state.profits || {}).sort().map(month => {
+      const p = state.profits[month], payroll = monthPayroll(state, month);
+      return {month, revenue: p.revenue, goodsCost: p.goodsCost, otherCost: p.otherCost, note: p.note, payroll, profit: p.revenue - p.goodsCost - p.otherCost - payroll};
+    });
+  }
+  function setProfit(state, monthKey, values) {
+    assert(monthValid(monthKey), '请选择 2000—2099 年内的月份');
+    const note = String(values.note ?? '').trim();
+    text(note, 200, '盈利备注');
+    const revenue = values.revenue, goodsCost = values.goodsCost, otherCost = values.otherCost;
+    assert(centsValid(revenue) && centsValid(goodsCost) && centsValid(otherCost), '盈利金额不正确');
+    if (!state.profits) state.profits = {};
+    if (!revenue && !goodsCost && !otherCost && !note) {
+      if (state.profits[monthKey]) { delete state.profits[monthKey]; log(state, monthKey + ' 清空盈利数据'); return false; }
+      return false;
+    }
+    const payroll = monthPayroll(state, monthKey);
+    state.profits[monthKey] = {revenue, goodsCost, otherCost, note};
+    log(state, monthKey + ' 保存盈利数据：营业额 ' + amount(revenue) + ' 元，进货成本 ' + amount(goodsCost) + ' 元，其他费用 ' + amount(otherCost) + ' 元' + (note ? '，备注：' + note : '') + '；当月工资(自动) ' + amount(payroll) + ' 元，盈利 ' + amount(revenue - goodsCost - otherCost - payroll) + ' 元');
+    return true;
+  }
+  function deleteProfit(state, monthKey) {
+    if (!state.profits?.[monthKey]) return false;
+    delete state.profits[monthKey]; log(state, monthKey + ' 删除盈利数据'); return true;
+  }
+  function employeeHistory(state, employeeId) {
+    return Object.keys(state.months).sort().map(month => {
+      const row = state.months[month].rows.find(r => r.employeeId === employeeId);
+      if (!row) return null;
+      return { month, base: row.base, commission: row.commission, gross: gross(row), deductions: deductions(row), net: net(row) };
+    }).filter(Boolean);
+  }
+  function yearRows(state, year) {
+    const result = [];
+    Object.keys(state.months).filter(month => month.startsWith(year + '-')).sort().forEach(month => {
+      (state.months[month].rows || []).forEach(row => {
+        result.push({ month, name: row.name, role: row.role, shopId: row.shopId, base: row.base, mealAllowance: row.mealAllowance, commission: row.commission, bonus: row.bonus, gross: gross(row), deductions: deductions(row), net: net(row) });
+      });
+    });
+    return result;
+  }
   function csvCell(value) {
     let str = String(value ?? '');
     if (/^[\s﻿]*[=+\-@]/.test(str) || /^[\t\r\n]/.test(str)) str = "'" + str;
     return '"' + str.replace(/"/g, '""') + '"';
   }
   function csv(rows) { return '﻿' + rows.map(row => row.map(csvCell).join(',')).join('\r\n'); }
-  return {fields, incomeFields, deductionFields, labels, MAX, UNASSIGNED, money, days, dayText, amount, commissionCents, gross, net, deductions, blankAmounts, newState, upgrade, validate, issues, pending, log, setEmployeeNote, deleteEmployee, addShop, deleteShop, generate, updateRow, setLock, importBatch, csv, monthValid};
+  return {fields, incomeFields, deductionFields, labels, MAX, UNASSIGNED, money, days, dayText, amount, commissionCents, gross, net, deductions, blankAmounts, newState, upgrade, validate, issues, pending, log, setEmployeeNote, deleteEmployee, addShop, deleteShop, generate, updateRow, setLock, setConfirmed, importBatch, csv, monthValid, setProfit, deleteProfit, monthPayroll, profitRows, employeeHistory, yearRows};
 });

@@ -32,7 +32,7 @@ test('停用员工及入职较晚的员工不新增到工资表，旧工资保�
 });
 test('锁账阻止编辑和补员；解锁必须说明原因', () => {
   const s=fixture(), row=s.months['2026-11'].rows[0];
-  C.setLock(s,'2026-11',true); assert.throws(()=>C.updateRow(s,'2026-11','employee-1',row)); assert.throws(()=>C.generate(s,'2026-11'));
+  C.setConfirmed(s,'2026-11','employee-1',true); C.setLock(s,'2026-11',true); assert.throws(()=>C.updateRow(s,'2026-11','employee-1',row)); assert.throws(()=>C.generate(s,'2026-11'));
   assert.throws(()=>C.setLock(s,'2026-11',false,'')); C.setLock(s,'2026-11',false,'重新核对');
   C.updateRow(s,'2026-11','employee-1',{...row,commission:20000}); assert.equal(s.months['2026-11'].rows[0].commission,20000);
   assert.match(s.logs[0].message,/原值/); assert.match(s.logs[0].message,/新值/);
@@ -109,7 +109,7 @@ test('禁止混合月份；修改原表月份必须显式确认',()=>{
   const next=imported(8);next.source.month='2026-10';assert.throws(()=>C.importBatch(C.newState(),{rows:[imported(),next]},{...batchOptions(2),allowMonthOverride:true}));
 });
 test('删除员工保留已锁账及未锁账工资，未来不再生成，备份可恢复',()=>{
-  const s=fixture();C.generate(s,'2026-10');C.setLock(s,'2026-11',true);
+  const s=fixture();C.generate(s,'2026-10');C.setConfirmed(s,'2026-11','employee-1',true);C.setLock(s,'2026-11',true);
   const before=structuredClone(s.months);C.deleteEmployee(s,'employee-1');
   assert.equal(s.employees[0].deleted,true);assert.equal(s.employees[0].active,false);
   assert.deepEqual(s.months,before);assert.match(s.logs[0].message,/删除员工档案/);
@@ -149,7 +149,7 @@ test('员工月度备注按月份与员工隔离，可单独清空，不影响�
   assert.equal(s.employeeNotes['2026-12'][0].note,'下月跟进');assert.deepEqual(s.months,wages);C.validate(s);
 });
 test('未生成工资或工资已锁账时仍可写内部月度备注，不改变锁账和工资',()=>{
-  const s=fixture();C.setLock(s,'2026-11',true);const wages=structuredClone(s.months);
+  const s=fixture();C.setConfirmed(s,'2026-11','employee-1',true);C.setLock(s,'2026-11',true);const wages=structuredClone(s.months);
   C.setEmployeeNote(s,'2026-11','employee-1','已发薪后的内部跟进');
   C.setEmployeeNote(s,'2026-12','employee-1','尚未生成工资也可备注');
   assert.deepEqual(s.months,wages);assert.equal(s.months['2026-12'],undefined);
@@ -186,6 +186,8 @@ test('提成算式计算百分比、固定金额、每件与四则运算，结�
   assert.equal(C.commissionCents('50%×100'),5000);
   assert.equal(C.commissionCents('1,000×2'),200000);
   assert.equal(C.commissionCents('（100）'),10000);
+  assert.equal(C.commissionCents('３.５×２'),700);
+  assert.equal(C.commissionCents('５０００×３％'),15000);
 });
 test('提成算式拒绝空、非法字符、括号不匹配、负结果、除零和超限',()=>{
   for(const value of ['','abc','50000xx','3%%','(1+2','1+2)','-5','1/0','100000000000×100','2..5','×5'])assert.throws(()=>C.commissionCents(value),value);
@@ -255,4 +257,101 @@ test('员工可服务多家店铺，不再限于4家',()=>{
   while(s.shops.length<10)s.shops.push({id:'extra'+s.shops.length,name:'分店'+s.shops.length,type:'线下'});
   s.employees[0].serviceShopIds=s.shops.map(sh=>sh.id);
   C.validate(s);
+});
+test('盈利数据保存、自动带入工资并计算盈利',()=>{
+  const s=fixture();
+  C.setProfit(s,'2026-11',{revenue:1000000,goodsCost:300000,otherCost:50000,note:'双十一'});
+  const row=C.profitRows(s).find(r=>r.month==='2026-11');
+  assert.equal(row.payroll,450000);
+  assert.equal(row.profit,1000000-300000-50000-450000);
+  assert.equal(row.note,'双十一');
+  C.validate(s);
+});
+test('盈利按月份升序排列，负盈利也可计算',()=>{
+  const s=fixture();
+  C.setProfit(s,'2026-12',{revenue:100000,goodsCost:0,otherCost:0,note:''});
+  C.setProfit(s,'2026-10',{revenue:200000,goodsCost:0,otherCost:0,note:''});
+  C.setProfit(s,'2026-11',{revenue:100000,goodsCost:300000,otherCost:0,note:''});
+  const rows=C.profitRows(s);
+  assert.deepEqual(rows.map(r=>r.month),['2026-10','2026-11','2026-12']);
+  assert.ok(rows.find(r=>r.month==='2026-11').profit<0);
+});
+test('盈利金额全空时清除该月记录',()=>{
+  const s=fixture();
+  C.setProfit(s,'2026-11',{revenue:1000,goodsCost:0,otherCost:0,note:''});
+  assert.ok(s.profits['2026-11']);
+  assert.equal(C.setProfit(s,'2026-11',{revenue:0,goodsCost:0,otherCost:0,note:''}),false);
+  assert.equal(s.profits['2026-11'],undefined);
+});
+test('删除盈利记录不影响工资',()=>{
+  const s=fixture();
+  C.setProfit(s,'2026-11',{revenue:1000,goodsCost:0,otherCost:0,note:''});
+  assert.equal(C.deleteProfit(s,'2026-11'),true);
+  assert.equal(s.profits['2026-11'],undefined);
+  assert.equal(C.deleteProfit(s,'2026-11'),false);
+  assert.equal(s.months['2026-11'].rows.length,1);
+});
+test('盈利数据校验拒绝非法月份、金额与备注',()=>{
+  const s=fixture();
+  assert.throws(()=>C.setProfit(s,'2026-13',{revenue:100,goodsCost:0,otherCost:0,note:''}),/月份/);
+  assert.throws(()=>C.setProfit(s,'2026-11',{revenue:-1,goodsCost:0,otherCost:0,note:''}),/金额/);
+  assert.throws(()=>C.setProfit(s,'2026-11',{revenue:0,goodsCost:0,otherCost:0,note:'x'.repeat(201)}),/备注/);
+  s.profits['bad']={revenue:0,goodsCost:0,otherCost:0,note:''};
+  assert.throws(()=>C.validate(s),/月份/);
+});
+test('旧数据没有盈利字段时可正常校验并补空对象',()=>{
+  const s=fixture();
+  delete s.profits;
+  C.validate(s);
+  assert.deepEqual(s.profits,{});
+});
+test('员工工资历史按月份升序汇总',()=>{
+  const s=fixture();
+  s.months['2026-11'].rows[0].commission=10000;
+  C.generate(s,'2026-12');
+  const h=C.employeeHistory(s,'employee-1');
+  assert.deepEqual(h.map(x=>x.month),['2026-11','2026-12']);
+  assert.equal(h[0].commission,10000);
+  assert.equal(h[1].base,450000);
+  assert.equal(h[1].net,450000);
+});
+test('年度汇总按年筛选每人每月一行',()=>{
+  const s=fixture();
+  C.generate(s,'2026-12');
+  const rows=C.yearRows(s,'2026');
+  assert.equal(rows.length,2);
+  assert.deepEqual(rows.map(r=>r.month),['2026-11','2026-12']);
+  assert.equal(rows[0].name,'测试员工');
+  assert.equal(C.yearRows(s,'2025').length,0);
+});
+test('年度汇总导出是真实 ZIP 工作簿',()=>{
+  const Excel=require('../excel.js');
+  const buf=Excel.annualWorkbook([{month:'2026-11',name:'测试',role:'客服',shopName:'淘宝店 A',base:450000,mealAllowance:0,commission:10000,bonus:0,gross:460000,deductions:0,net:460000}],'2026年工资汇总');
+  const bytes=new Uint8Array(buf);
+  assert.equal(bytes[0],0x50);assert.equal(bytes[1],0x4B);
+  assert.ok(buf.length>500);
+});
+test('逐人确认后才能锁账；锁账后不能再改确认',()=>{
+  const s=fixture();
+  assert.throws(()=>C.setLock(s,'2026-11',true),/确认/);
+  assert.equal(C.setConfirmed(s,'2026-11','employee-1',true),true);
+  assert.equal(s.months['2026-11'].rows[0].review.confirmed,true);
+  assert.equal(s.months['2026-11'].rows[0].review.reason,'老板已确认');
+  C.setLock(s,'2026-11',true);
+  assert.throws(()=>C.setConfirmed(s,'2026-11','employee-1',false),/锁账/);
+});
+test('取消确认清除说明；重复确认不产生日志',()=>{
+  const s=fixture();
+  C.setConfirmed(s,'2026-11','employee-1',true);
+  assert.equal(C.setConfirmed(s,'2026-11','employee-1',true),false);
+  C.setConfirmed(s,'2026-11','employee-1',false);
+  assert.equal(s.months['2026-11'].rows[0].review.confirmed,false);
+  assert.equal(s.months['2026-11'].rows[0].review.reason,'');
+});
+test('员工手机号与微信号可选填并校验长度',()=>{
+  const s=fixture();
+  s.employees[0].phone='13800138000';s.employees[0].wechat='wx_abc';
+  C.validate(s);
+  s.employees[0].phone='x'.repeat(31);assert.throws(()=>C.validate(s),/手机号/);
+  s.employees[0].phone='138';s.employees[0].wechat='y'.repeat(61);assert.throws(()=>C.validate(s),/微信/);
 });

@@ -17,6 +17,7 @@
     "grid": "<path d=\"M4 5a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -4\" /> <path d=\"M14 5a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -4\" /> <path d=\"M4 15a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -4\" /> <path d=\"M14 15a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -4\" />",
     "calendar": "<path d=\"M4 7a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12\" /> <path d=\"M16 3v4\" /> <path d=\"M8 3v4\" /> <path d=\"M4 11h16\" />",
     "search": "<path d=\"M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0\" /> <path d=\"M21 21l-6 -6\" />",
+    "trending-up": "<path d=\"M3 17l6 -6l4 4l8 -8\" /> <path d=\"M21 7l-5 0l5 0l0 5\" />",
     "receipt": "<path d=\"M5 21v-16a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v16l-3 -2l-2 2l-2 -2l-2 2l-2 -2l-3 2m4 -14h6m-6 4h6m-2 4h2\" />",
     "minus-circle": "<path d=\"M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0\" /> <path d=\"M9 12l6 0\" />",
     "info": "<path d=\"M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0\" /> <path d=\"M12 9h.01\" /> <path d=\"M11 12h1v4h1\" />",
@@ -106,7 +107,7 @@
     const shops = [...state.shops, {id: C.UNASSIGNED, name: '待确认归属'}];
     return (all ? '<option value="">全部店铺</option>' : '') + shops.map(s => `<option value="${escape(s.id)}"${s.id === selected ? ' selected' : ''}>${escape(s.name)}</option>`).join('');
   }
-  function reviewText(row) { return C.pending(row) ? '待核实' : row.review?.confirmed ? '已说明核实' : row.source ? '金额一致' : '待核对'; }
+  function reviewText(row) { return C.pending(row) ? '待核实' : row.review?.confirmed ? '已确认' : '未确认'; }
   function originalNet(row) { return row.source?.recordedNet == null ? '—' : C.amount(row.source.recordedNet); }
   function visibleRows() {
     const filter = $('shop-filter').value, query = $('search').value.trim().toLowerCase();
@@ -140,13 +141,36 @@
     $('summary-scope').textContent=($('month').value||'所选月份')+' · '+($('shop-filter').value?shopName($('shop-filter').value):'全部店铺')+($('search').value.trim()?' · 已筛选':'');
     $('page-meta').textContent=($('month').value||'所选月份')+' · 共 '+rows.length+' 人'+($('shop-filter').value||$('search').value.trim()?'（已筛选）':'');
   }
+  function renderTodo() {
+    const month = monthData(), items = [];
+    const rows = month?.rows || [];
+    const pending = rows.filter(C.pending).length;
+    const unassigned = rows.filter(r => r.shopId === C.UNASSIGNED).length;
+    const missing = eligibleMissing().length;
+    const unconfirmed = rows.filter(r => !r.review?.confirmed).length;
+    if (!rows.length) {
+      items.push({ level: 'warn', text: '本月还没有工资记录，请导入 Excel 或点“生成本月工资表”' });
+    } else {
+      if (!month.locked) items.push({ level: rows.some(C.pending) ? 'warn' : 'info', text: '本月工资尚未锁账' });
+      if (pending) items.push({ level: 'warn', text: pending + ' 人待核实（未分配店铺、金额差异或缺项）' });
+      if (unassigned) items.push({ level: 'warn', text: unassigned + ' 人的店铺归属还是“待确认”，需要分配' });
+      if (unconfirmed) items.push({ level: 'warn', text: unconfirmed + ' 人还没点“确认”' });
+      if (missing) items.push({ level: 'info', text: missing + ' 位在职员工还没加入本月工资' });
+    }
+    const box = $('payroll-todo');
+    if (!items.length) { box.hidden = true; box.innerHTML = ''; return; }
+    box.hidden = false;
+    box.innerHTML = '<div class="todo-title">' + icon('alert-circle') + '<strong>发薪前待办</strong></div><ul class="todo-list">' + items.map(item => '<li class="todo-' + item.level + '">' + escape(item.text) + '</li>').join('') + '</ul>';
+  }
   function renderPayroll() {
     const month = monthData(), rows = visibleRows(), hasRows = !!month?.rows.length;
     renderSummary(rows,hasRows);
+    renderTodo();
     $('month-title').textContent = ($('month').value || '所选月份') + ' 工资明细';
     $('row-count').textContent = hasRows ? `当前显示 ${rows.length} / ${month.rows.length} 位员工` : '从导入或新增员工开始';
     const pending = (month?.rows || []).filter(C.pending).length;
-    $('lock-badge').innerHTML = statusText(!hasRows ? '未生成' : month.locked ? '已锁账' : pending ? `${pending} 人待核实` : '待核对', !hasRows ? 'neutral' : month.locked ? 'locked' : 'draft');
+    const unconfirmed = (month?.rows || []).filter(r => !r.review?.confirmed).length;
+    $('lock-badge').innerHTML = statusText(!hasRows ? '未生成' : month.locked ? '已锁账' : pending ? `${pending} 人待核实` : unconfirmed ? `${unconfirmed} 人未确认` : '待核对', !hasRows ? 'neutral' : month.locked ? 'locked' : 'draft');
     $('lock').disabled = !hasRows || blocked;
     $('lock').innerHTML = icon(month?.locked?'lock':'check-circle')+(month?.locked ? '解锁修改' : '审核锁账');
     $('generate').innerHTML = icon('plus')+(hasRows ? '补充在职员工' : '生成本月工资表');
@@ -159,16 +183,16 @@
     $('review-summary').hidden = !pending && !sourceRows.length;
     $('review-summary').textContent = `${pending ? '本月全部记录中有 '+pending+' 人存在未分配店铺、差异或缺项，请逐人核实。' : '本月已无待处理的导入核对事项。'}${sourceRows.length ? ' 原表已填写实发的 '+filled.length+' 条合计 '+C.amount(filled.reduce((s,r)=>s+r.source.recordedNet,0))+' 元；另有 '+(sourceRows.length-filled.length)+' 条实发空白。软件合计仅供核对。' : ''}`;
     $('payroll-body').innerHTML = rows.length ? rows.map(r => {
-      const status=C.pending(r)?'draft':reviewText(r)==='待核对'?'neutral':'locked';
+      const status=C.pending(r)?'draft':r.review?.confirmed?'locked':'neutral';
       const other=C.gross(r)-r.base-r.mealAllowance-r.commission;
       const diff=r.source?.recordedNet==null?null:C.net(r)-r.source.recordedNet;
       const description=(r.role||'岗位待补充')+' · '+shopName(r.shopId);
-      return `<tr><td class="person-cell">${person(r.name,description)}</td><td class="numeric" data-label="基本工资 / 饭贴"><span>${C.amount(r.base)}</span><small>饭贴 ${C.amount(r.mealAllowance)}</small></td><td class="numeric" data-label="提成">${C.amount(r.commission)}</td><td class="numeric" data-label="其他应发">${C.amount(other)}</td>${deductionCell(r)}<td class="numeric net-cell" data-label="软件实发"><strong class="net ${C.net(r)<0?'negative':''}">${C.amount(C.net(r))}</strong><small class="${diff!==null&&diff!==0?'difference-note':''}">${r.source?'原表 '+(r.source.recordedNet===null?'未填写':originalNet(r)):'未关联原表'}${diff!==null&&diff!==0?' · 差 '+C.amount(diff):''}</small></td><td class="status-cell" data-label="核对状态">${statusText(reviewText(r),status,C.issues(r).join('；')||'仍需人工审核')}${r.source?'<small class="source-ref">第 '+r.source.row+' 行</small>':''}</td><td class="row-action-cell"><div class="row-actions"><button class="text-button edit-action" data-edit-salary="${escape(r.employeeId)}" ${month.locked || blocked ? 'disabled' : ''}>编辑工资</button><button class="text-button" data-slip="${escape(r.employeeId)}">工资条</button>${month.locked || blocked ? '' : `<button class="text-button danger remove-action" data-remove="${escape(r.employeeId)}" title="从本月工资表移除" aria-label="从本月工资表移除 ${escape(r.name)}">${icon('trash')}</button>`}</div></td></tr>`;
-    }).join('') : '<tr class="no-results"><td colspan="8"><div class="no-results-content">'+icon('search')+'<span>没有找到匹配的员工</span><small>试试其他姓名，或切换店铺筛选。</small></div></td></tr>';
+      return `<tr><td class="person-cell">${person(r.name,description)}</td><td class="numeric" data-label="基本工资 / 饭贴"><span>${C.amount(r.base)}</span><small>饭贴 ${C.amount(r.mealAllowance)}</small></td><td class="numeric" data-label="提成">${C.amount(r.commission)}</td><td class="numeric" data-label="其他应发">${C.amount(other)}</td>${deductionCell(r)}<td class="numeric net-cell" data-label="软件实发"><strong class="net ${C.net(r)<0?'negative':''}">${C.amount(C.net(r))}</strong><small class="${diff!==null&&diff!==0?'difference-note':''}">${r.source?'原表 '+(r.source.recordedNet===null?'未填写':originalNet(r)):'未关联原表'}${diff!==null&&diff!==0?' · 差 '+C.amount(diff):''}</small></td><td class="status-cell" data-label="核对状态">${statusText(reviewText(r),status,C.pending(r)?C.issues(r).join('；'):(r.review?.confirmed?'老板已确认工资无误':'还没点确认'))}${r.source?'<small class="source-ref">第 '+r.source.row+' 行</small>':''}</td><td class="confirm-cell" data-label="确认"><label class="confirm-check"><input type="checkbox" data-confirm="${escape(r.employeeId)}" ${r.review?.confirmed?'checked':''} ${month.locked||blocked?'disabled':''} aria-label="确认 ${escape(r.name)} 工资无误"><span>确认</span></label></td><td class="row-action-cell"><div class="row-actions"><button class="text-button edit-action" data-edit-salary="${escape(r.employeeId)}" ${month.locked || blocked ? 'disabled' : ''}>编辑工资</button><button class="text-button" data-slip="${escape(r.employeeId)}">工资条</button>${month.locked || blocked ? '' : `<button class="text-button danger remove-action" data-remove="${escape(r.employeeId)}" title="从本月工资表移除" aria-label="从本月工资表移除 ${escape(r.name)}">${icon('trash')}</button>`}</div></td></tr>`;
+    }).join('') : '<tr class="no-results"><td colspan="9"><div class="no-results-content">'+icon('search')+'<span>没有找到匹配的员工</span><small>试试其他姓名，或切换店铺筛选。</small></div></td></tr>';
     const sum = fn => C.amount(rows.reduce((total, r) => total + fn(r), 0));
     const sumCents = fn => rows.reduce((total, r) => total + fn(r), 0);
     const dedTotals = { leaveDeduction: sumCents(r => r.leaveDeduction), clothing: sumCents(r => r.clothing), advance: sumCents(r => r.advance), depositDeduction: sumCents(r => r.depositDeduction), lateness: sumCents(r => r.lateness), deduction: sumCents(r => r.deduction), insurance: sumCents(r => r.insurance), tax: sumCents(r => r.tax) };
-    $('payroll-foot').innerHTML = `<tr><td>筛选合计 · ${rows.length} 人</td><td class="numeric">${sum(r=>r.base)}<small>饭贴 ${sum(r=>r.mealAllowance)}</small></td><td class="numeric">${sum(r=>r.commission)}</td><td class="numeric">${sum(r=>C.gross(r)-r.base-r.mealAllowance-r.commission)}</td>${deductionCell(dedTotals)}<td class="numeric net">${sum(C.net)}</td><td colspan="2" class="footer-disclaimer">计算参考，非发薪凭证</td></tr>`;
+    $('payroll-foot').innerHTML = `<tr><td>筛选合计 · ${rows.length} 人</td><td class="numeric">${sum(r=>r.base)}<small>饭贴 ${sum(r=>r.mealAllowance)}</small></td><td class="numeric">${sum(r=>r.commission)}</td><td class="numeric">${sum(r=>C.gross(r)-r.base-r.mealAllowance-r.commission)}</td>${deductionCell(dedTotals)}<td class="numeric net">${sum(C.net)}</td><td class="footer-confirm">确认 ${rows.filter(r=>r.review?.confirmed).length}/${rows.length}</td><td colspan="2" class="footer-disclaimer">计算参考，非发薪凭证</td></tr>`;
   }
   function employeeProfiles() { return state.employees.filter(e => !e.deleted); }
   function noteDraftKey(month, id) { return month + '/' + id; }
@@ -185,12 +209,12 @@
     const employees = employeeProfiles(), notes = new Map((state.employeeNotes?.[employeeNoteMonth] || []).map(entry => [entry.employeeId, entry.note]));
     $('employee-note-month').value = employeeNoteMonth;
     noteStatus();
-    $('employees-body').innerHTML = employees.length ? employees.map(e => `<tr><td class="person-cell">${person(e.name,e.role||'岗位待补充')}</td><td data-label="归属店铺">${escape(shopName(e.shopId))}</td><td data-label="服务店铺" class="service-shops">${e.serviceShopIds.length?e.serviceShopIds.map(id=>escape(shopName(id))).join('、'):'<span class="muted">待确认</span>'}</td><td data-label="工资启用月份">${escape(e.startMonth)}</td><td class="numeric" data-label="默认底薪">${C.amount(e.base)}</td><td data-label="员工状态">${statusText(e.active?'在职':'已停用',e.active?'locked':'neutral')}</td><td class="monthly-note-cell" data-label="${escape(employeeNoteMonth)} 月度备注">${noteEditor(e,notes)}</td><td class="end row-action-cell"><div class="row-actions"><button class="text-button edit-action" data-edit-employee="${escape(e.id)}" ${blocked ? 'disabled' : ''}>编辑档案</button><button class="text-button delete-employee-action" data-delete-employee="${escape(e.id)}" aria-label="删除员工 ${escape(e.name)}" ${blocked ? 'disabled' : ''}>${icon('trash')}删除员工</button></div></td></tr>`).join('') : '<tr class="no-results"><td colspan="8"><div class="no-results-content">'+icon('users')+'<span>尚无员工</span><small>点击右上角“添加员工”，或从工资单导入。</small></div></td></tr>';
+    $('employees-body').innerHTML = employees.length ? employees.map(e => `<tr><td class="person-cell">${person(e.name,e.role||'岗位待补充')}</td><td data-label="归属店铺">${escape(shopName(e.shopId))}</td><td data-label="服务店铺" class="service-shops">${e.serviceShopIds.length?e.serviceShopIds.map(id=>escape(shopName(id))).join('、'):'<span class="muted">待确认</span>'}</td><td class="contact-cell" data-label="联系方式"><span>手机 ${escape(e.phone || '—')}</span><small>微信 ${escape(e.wechat || '—')}</small></td><td data-label="工资启用月份">${escape(e.startMonth)}</td><td class="numeric" data-label="默认底薪">${C.amount(e.base)}</td><td data-label="员工状态">${statusText(e.active?'在职':'已停用',e.active?'locked':'neutral')}</td><td class="monthly-note-cell" data-label="${escape(employeeNoteMonth)} 月度备注">${noteEditor(e,notes)}</td><td class="end row-action-cell"><div class="row-actions"><button class="text-button" data-wage-history="${escape(e.id)}">工资历史</button><button class="text-button edit-action" data-edit-employee="${escape(e.id)}" ${blocked ? 'disabled' : ''}>编辑档案</button><button class="text-button delete-employee-action" data-delete-employee="${escape(e.id)}" aria-label="删除员工 ${escape(e.name)}" ${blocked ? 'disabled' : ''}>${icon('trash')}删除员工</button></div></td></tr>`).join('') : '<tr class="no-results"><td colspan="9"><div class="no-results-content">'+icon('users')+'<span>尚无员工</span><small>点击右上角“添加员工”，或从工资单导入。</small></div></td></tr>';
   }
   function render() {
     const selected = $('shop-filter').value;
     $('shop-filter').innerHTML = options(selected, true);
-    renderPayroll(); renderEmployees();
+    renderPayroll(); renderEmployees(); renderProfit();
     $('shops-inputs').innerHTML = state.shops.map(s => `<div class="shop-row" data-shop-row="${escape(s.id)}"><input data-shop-name value="${escape(s.name)}" maxlength="60" required placeholder="店名" ${blocked?'disabled':''}><select data-shop-type aria-label="店铺类型" ${blocked?'disabled':''}><option value="线下"${s.type==='线下'?' selected':''}>线下实体店</option><option value="线上"${s.type==='线上'?' selected':''}>线上淘宝店</option></select><button type="button" class="text-button danger" data-delete-shop="${escape(s.id)}" ${blocked?'disabled':''}>${icon('trash')}删除</button></div>`).join('');
     $('audit-list').innerHTML = state.logs.length ? state.logs.slice(0, 50).map(l => `<div class="audit-entry"><time>${escape(new Date(l.at).toLocaleString('zh-CN', {hour12: false}))}</time>${escape(l.message)}</div>`).join('') + (state.logs.length > 50 ? '<p class="muted">页面仅展示最近 50 条，完整记录包含在备份中。</p>' : '') : '<p class="muted">还没有操作记录。</p>';
     $('add-employee').disabled = blocked;
@@ -204,7 +228,7 @@
       const active=el.dataset.view===name;el.classList.toggle('active',active);
       if(active)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');
     });
-    $('breadcrumb-current').textContent=({payroll:'每月工资',employees:'员工档案',settings:'店铺与备份',ai:'AI 查账',guide:'使用说明'})[name]||'工作空间';
+    $('breadcrumb-current').textContent=({payroll:'每月工资',employees:'员工档案',settings:'店铺与备份',ai:'AI 查账',profit:'盈利分析',guide:'使用说明'})[name]||'工作空间';
     window.scrollTo(0,0);
   }
   function openEmployee(id) {
@@ -214,6 +238,7 @@
     $('employee-form').reset(); $('employee-id').value = e?.id || '';
     $('employee-title').textContent = e ? '编辑员工档案' : '添加员工';
     $('employee-name').value = e?.name || ''; $('employee-role').value = e?.role || '';
+    $('employee-phone').value = e?.phone || ''; $('employee-wechat').value = e?.wechat || '';
     $('employee-shop').innerHTML = options(e?.shopId || state.shops[0].id);
     $('employee-base').value = C.amount(e?.base || 0); $('employee-start').value = e?.startMonth || currentMonth;
     $('employee-active').value = String(e?.active ?? true);
@@ -224,7 +249,7 @@
     event.preventDefault();
     const id = $('employee-id').value || crypto.randomUUID(), previous = state.employees.find(e => e.id === id);
     if ($('employee-id').value && (!previous || previous.deleted)) throw new Error('员工档案不存在或已删除，未保存修改');
-    const employee = {id, name: $('employee-name').value.trim(), role: $('employee-role').value.trim(), shopId: $('employee-shop').value,
+    const employee = {id, name: $('employee-name').value.trim(), role: $('employee-role').value.trim(), phone: $('employee-phone').value.trim(), wechat: $('employee-wechat').value.trim(), shopId: $('employee-shop').value,
       serviceShopIds: [...new Set([...($('employee-shop').value === C.UNASSIGNED ? [] : [$('employee-shop').value]), ...Array.from($('employee-services').querySelectorAll('input:checked'), el => el.value)])],
       base: C.money($('employee-base').value), active: $('employee-active').value === 'true', startMonth: $('employee-start').value};
     if (employeeProfiles().some(e => e.id !== id && e.name === employee.name) && !confirm('已有同名员工。确定这是另一位员工，需要单独建立档案吗？')) return;
@@ -438,7 +463,15 @@
   }
   function exportExcel() {
     const rows = visibleRows(); if (!rows.length) throw new Error('当前筛选下没有工资记录');
-    return download((isDemo ? '演示-' : '')+monthKey()+'-工资单-当前筛选.xlsx', Excel.payrollWorkbook(rows,monthKey(),shopName,monthData().locked), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    const shop = $('shop-filter').value;
+    return download((isDemo ? '演示-' : '')+monthKey()+'-工资单-当前筛选.xlsx', Excel.payrollWorkbook(rows,monthKey(),shop?shopName(shop):'',monthData().locked), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  }
+  function exportAnnual() {
+    const year = monthKey().slice(0, 4);
+    const rows = C.yearRows(state, year).map(r => ({...r, shopName: shopName(r.shopId)}));
+    if (!rows.length) throw new Error(year + ' 年还没有工资记录');
+    const title = year + '年工资汇总';
+    return download((isDemo ? '演示-' : '') + title + '.xlsx', Excel.annualWorkbook(rows, title), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   }
   function slipData(id) {
     const row = monthData()?.rows.find(r => r.employeeId === id); if (!row) throw new Error('工资记录不存在');
@@ -449,6 +482,45 @@
     const displayed = C.fields.filter(f => row[f] !== 0 || ['base','mealAllowance','commission','bonus'].includes(f));
     $('slip-content').innerHTML = `<div class="slip-heading"><h2>${escape(monthKey())} 工资条</h2>${isDemo ? '<p class="muted">虚构演示数据</p>' : ''}</div><div class="slip-meta">姓名：${escape(row.name)}<br>岗位：${escape(row.role || '—')}<br>归属店铺：${escape(shopName(row.shopId))}<br>请假天数：${C.dayText(row.leaveDays)} 天<br>核对状态：${monthData().locked ? '已锁账' : escape(reviewText(row))+'（非发薪凭证）'}</div><table class="slip-table"><tbody>${displayed.map(f => `<tr><td>${escape(C.labels[f])}</td><td class="numeric">${C.amount(row[f])}</td></tr>`).join('')}<tr><td><strong>软件计算实发（元）</strong></td><td class="numeric net"><strong>${C.amount(C.net(row))}</strong></td></tr>${row.source ? `<tr><td>原表实发（元）</td><td class="numeric">${originalNet(row)}</td></tr>` : ''}</tbody></table><div class="slip-note">备注：${escape(row.note || '无')}${row.source ? '<br>原表来源：'+escape(row.source.fileName)+' / '+escape(row.source.sheet)+' / 第 '+row.source.row+' 行' : ''}${C.issues(row).length ? '<br>核对提示：'+escape(C.issues(row).join('；')) : ''}${row.review?.reason ? '<br>'+ (row.review.confirmed ? '核实说明：' : '未确认的说明（仅供参考）：') +escape(row.review.reason) : ''}<br>各项金额由人工核定；本工资条不证明已付款。</div>`;
     $('slip-dialog').showModal(); $('slip-dialog').scrollTop = 0;
+  }
+  function wageHistorySVG(history) {
+    const W = 720, H = 300, L = 62, R = 18, T = 18, B = 40;
+    const values = history.map(h => h.net);
+    let min = Math.min(0, ...values), max = Math.max(0, ...values);
+    if (min === max) { min -= 100; max += 100; }
+    const pad = (max - min) * 0.12; min -= pad; max += pad;
+    const plotW = W - L - R, plotH = H - T - B;
+    const x = i => history.length === 1 ? L + plotW / 2 : L + plotW * i / (history.length - 1);
+    const y = v => T + plotH * (1 - (v - min) / (max - min));
+    const years = new Set(history.map(h => h.month.slice(0, 4)));
+    const xLabel = m => years.size > 1 ? m.slice(2, 4) + '/' + m.slice(5, 7) : Number(m.slice(5, 7)) + '月';
+    let parts = '';
+    for (let g = 0; g <= 4; g++) {
+      const v = max - (max - min) * g / 4, yy = y(v);
+      parts += '<line x1="' + L + '" y1="' + yy.toFixed(1) + '" x2="' + (W - R) + '" y2="' + yy.toFixed(1) + '" class="profit-grid"/><text x="' + (L - 8) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" class="profit-axis-label">' + compactMoney(v) + '</text>';
+    }
+    if (min < 0 && max > 0) parts += '<line x1="' + L + '" y1="' + y(0).toFixed(1) + '" x2="' + (W - R) + '" y2="' + y(0).toFixed(1) + '" class="profit-zero"/>';
+    const pts = values.map((v, i) => ({x: x(i), y: y(v), v, month: history[i].month}));
+    const poly = pts.map(p => p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ');
+    if (pts.length > 1) { const baseY = Math.max(T, Math.min(H - B, y(0))); parts += '<polygon points="' + L + ',' + baseY.toFixed(1) + ' ' + poly + ' ' + (W - R) + ',' + baseY.toFixed(1) + '" class="profit-area"/>'; }
+    parts += '<polyline points="' + poly + '" class="profit-line"/>';
+    parts += pts.map(p => '<circle cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="3.6" class="profit-dot"><title>' + p.month + ' · 实发 ' + C.amount(p.v) + ' 元</title></circle>' + (pts.length <= 12 ? '<text x="' + p.x.toFixed(1) + '" y="' + (p.y - 9).toFixed(1) + '" text-anchor="middle" class="profit-value-label">' + compactMoney(p.v) + '</text>' : '')).join('');
+    parts += pts.map(p => '<text x="' + p.x.toFixed(1) + '" y="' + (H - B + 20).toFixed(1) + '" text-anchor="middle" class="profit-x-label">' + xLabel(p.month) + '</text>').join('');
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="工资历史折线图">' + parts + '</svg>';
+  }
+  function openWageHistory(id) {
+    const e = state.employees.find(x => x.id === id);
+    if (!e) throw new Error('员工档案不存在或已删除');
+    const history = C.employeeHistory(state, id);
+    $('history-title').textContent = e.name + ' · 工资历史';
+    if (!history.length) {
+      $('history-chart').innerHTML = '<div class="empty"><p class="empty-lead">还没有工资记录。</p><p class="muted">先在“每月工资”里生成或导入该员工的工资。</p></div>';
+      $('history-body').innerHTML = '';
+    } else {
+      $('history-chart').innerHTML = wageHistorySVG(history);
+      $('history-body').innerHTML = history.map(h => '<tr><td data-label="月份">' + escape(h.month) + '</td><td class="numeric" data-label="基本工资">' + C.amount(h.base) + '</td><td class="numeric" data-label="提成">' + C.amount(h.commission) + '</td><td class="numeric" data-label="应发合计">' + C.amount(h.gross) + '</td><td class="numeric" data-label="扣款合计">' + C.amount(h.deductions) + '</td><td class="numeric" data-label="实发金额"><strong class="net">' + C.amount(h.net) + '</strong></td></tr>').join('');
+    }
+    $('history-dialog').showModal(); $('history-dialog').scrollTop = 0;
   }
   function importChoices() {
     return Array.from($('import-body').querySelectorAll('input[data-import-index]'), checkbox => ({index:Number(checkbox.dataset.importIndex),selected:checkbox.checked&&!checkbox.disabled,employeeId:$('import-match-'+checkbox.dataset.importIndex).value}));
@@ -563,6 +635,14 @@
     }
     if (button.dataset.editSalary) openSalary(button.dataset.editSalary);
     if (button.dataset.slip) openSlip(button.dataset.slip);
+    if (button.dataset.wageHistory) openWageHistory(button.dataset.wageHistory);
+    if (button.dataset.profitEdit) { loadProfitEditor(button.dataset.profitEdit); view('profit'); $('profit-month').scrollIntoView({behavior:'smooth', block:'center'}); }
+    if (button.dataset.profitDelete) {
+      const month = button.dataset.profitDelete;
+      if (!confirm('删除 ' + month + ' 的盈利记录？当月工资数据不受影响。')) return;
+      commit(s => C.deleteProfit(s, month));
+      loadProfitEditor($('profit-month').value); toast('盈利记录已删除');
+    }
     if (button.dataset.remove) {
       const row = monthData().rows.find(r => r.employeeId === button.dataset.remove);
       if (!confirm('从 ' + monthKey() + ' 工资表移除 ' + row.name + '？该员工本月已填写的工资项目会被移除，员工档案保留。')) return;
@@ -579,6 +659,15 @@
   $('open-demo').addEventListener('click', () => window.open('工资助手.html?demo=1', '_blank', 'noopener'));
   $('month').addEventListener('change', safe(() => {monthKey(); renderPayroll();}));
   $('shop-filter').addEventListener('change', renderPayroll); $('search').addEventListener('input', renderPayroll);
+  $('payroll-body').addEventListener('change', safe(event => {
+    const input = event.target.closest('[data-confirm]'); if (!input) return;
+    const id = input.dataset.confirm, checked = input.checked;
+    const row = monthData()?.rows.find(r => r.employeeId === id);
+    if (!row) return;
+    if (!checked && !confirm('取消确认“' + row.name + '”的工资？确认状态会清除，之后需要重新点“确认”才能锁账。')) { input.checked = true; return; }
+    commit(s => C.setConfirmed(s, monthKey(), id, checked));
+    toast(checked ? '已确认 ' + row.name + ' 工资无误' : '已取消 ' + row.name + ' 的确认');
+  }));
   $('generate').addEventListener('click', safe(() => {
     const month = monthKey(), count = eligibleMissing().length;
     if (!count) {toast('没有符合条件的在职员工。请先检查员工档案和入职月份。'); return;}
@@ -594,6 +683,8 @@
     } else {
       const unresolved = m.rows.filter(C.pending).length;
       if (unresolved) throw new Error('还有 '+unresolved+' 人存在未分配店铺、差异或缺项。请编辑工资，核实并填写说明后再锁账。');
+      const unconfirmed = m.rows.filter(r => !r.review?.confirmed).length;
+      if (unconfirmed) throw new Error('还有 '+unconfirmed+' 人没点“确认”。请逐人确认工资无误后再锁账。');
       const negative = m.rows.filter(r => C.net(r) < 0).length;
       if (!confirm(`确认已核对 ${monthKey()} 全部 ${m.rows.length} 人的工资、提成和各项扣款？${negative ? '\n注意：有 ' + negative + ' 人实发为负数，请特别核对。' : ''}\n锁账后需填写原因才能解锁。锁账不代表已付款。`)) return;
       commit(s => C.setLock(s, monthKey(), true)); toast('本月已锁账');
@@ -601,6 +692,7 @@
   }));
   $('export-payroll').addEventListener('click', safe(exportTable));
   $('export-excel').addEventListener('click', safe(exportExcel));
+  $('export-annual').addEventListener('click', safe(exportAnnual));
   $('slip-csv').addEventListener('click', safe(() => {
     const {row, values} = slipData(slipEmployee);
     const name = row.name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_');
@@ -651,7 +743,7 @@
     commit(s => {
       Object.keys(s).forEach(k => delete s[k]);
       // 只复制已知字段，避免备份里的 __proto__ 等字段影响原型。
-      for (const k of ['app','version','employees','months','employeeNotes','logs','shops']) if (restored[k] !== undefined) s[k] = structuredClone(restored[k]);
+      for (const k of ['app','version','employees','months','employeeNotes','profits','logs','shops']) if (restored[k] !== undefined) s[k] = structuredClone(restored[k]);
       C.log(s, '从本地备份恢复全部数据（原空间数据被替换）');
     }, true);
     noteDrafts.clear(); renderEmployees();
@@ -700,6 +792,125 @@
       } catch (_) { /* 镜像文件损坏时忽略，不影响启动 */ }
     })();
   }
+
+  // ---- 盈利分析 ----
+  function moneyOpt(value) { const s = String(value).trim(); return s === '' ? 0 : C.money(s); }
+  function profitOf(month) { return state.profits?.[month] || {revenue: 0, goodsCost: 0, otherCost: 0, note: ''}; }
+  function profitRows() { return C.profitRows(state); }
+  function profitEditorPreview() {
+    let payroll = 0, profit = null, ratio = null;
+    try {
+      const month = $('profit-month').value;
+      if (C.monthValid(month)) {
+        payroll = C.monthPayroll(state, month);
+        const revenue = moneyOpt($('profit-revenue').value);
+        profit = revenue - moneyOpt($('profit-goods').value) - moneyOpt($('profit-other').value) - payroll;
+        if (revenue > 0) ratio = payroll / revenue * 100;
+      }
+    } catch (_) { profit = null; }
+    $('profit-payroll').textContent = C.amount(payroll);
+    const ratioEl = $('profit-ratio');
+    ratioEl.textContent = ratio === null ? '—' : ratio.toFixed(1) + '%';
+    ratioEl.classList.toggle('ratio-high', ratio !== null && ratio >= 40);
+    ratioEl.classList.toggle('ratio-mid', ratio !== null && ratio >= 30 && ratio < 40);
+    const el = $('profit-preview');
+    el.textContent = profit === null ? '—' : C.amount(profit);
+    el.classList.toggle('negative', profit !== null && profit < 0);
+  }
+  function loadProfitEditor(month) {
+    $('profit-month').value = month;
+    const p = profitOf(month);
+    $('profit-revenue').value = p.revenue ? C.amount(p.revenue) : '';
+    $('profit-goods').value = p.goodsCost ? C.amount(p.goodsCost) : '';
+    $('profit-other').value = p.otherCost ? C.amount(p.otherCost) : '';
+    $('profit-note').value = p.note || '';
+    $('profit-delete').hidden = !state.profits?.[month];
+    profitEditorPreview();
+  }
+  function compactMoney(cents) {
+    const yuan = cents / 100, abs = Math.abs(yuan), sign = yuan < 0 ? '-' : '';
+    if (abs >= 100000000) return sign + (abs / 100000000).toFixed(1).replace(/\.0$/, '') + '亿';
+    if (abs >= 10000) return sign + (abs / 10000).toFixed(abs >= 1000000 ? 0 : 1).replace(/\.0$/, '') + '万';
+    return sign + String(Math.round(abs));
+  }
+  function profitChartSVG(rows) {
+    const W = 720, H = 300, L = 62, R = 18, T = 18, B = 40;
+    const values = rows.map(r => r.profit);
+    let min = Math.min(0, ...values), max = Math.max(0, ...values);
+    if (min === max) { min -= 100; max += 100; }
+    const pad = (max - min) * 0.12;
+    min -= pad; max += pad;
+    const plotW = W - L - R, plotH = H - T - B;
+    const x = i => rows.length === 1 ? L + plotW / 2 : L + plotW * i / (rows.length - 1);
+    const y = v => T + plotH * (1 - (v - min) / (max - min));
+    const baseY = Math.max(T, Math.min(H - B, y(0)));
+    const years = new Set(rows.map(r => r.month.slice(0, 4)));
+    const xLabel = m => years.size > 1 ? m.slice(2, 4) + '/' + m.slice(5, 7) : Number(m.slice(5, 7)) + '月';
+    let parts = '';
+    for (let g = 0; g <= 4; g++) {
+      const v = max - (max - min) * g / 4, yy = y(v);
+      parts += '<line x1="' + L + '" y1="' + yy.toFixed(1) + '" x2="' + (W - R) + '" y2="' + yy.toFixed(1) + '" class="profit-grid"/><text x="' + (L - 8) + '" y="' + (yy + 4).toFixed(1) + '" text-anchor="end" class="profit-axis-label">' + compactMoney(v) + '</text>';
+    }
+    if (min < 0 && max > 0) parts += '<line x1="' + L + '" y1="' + y(0).toFixed(1) + '" x2="' + (W - R) + '" y2="' + y(0).toFixed(1) + '" class="profit-zero"/>';
+    const pts = values.map((v, i) => ({x: x(i), y: y(v), v, month: rows[i].month}));
+    const poly = pts.map(p => p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ');
+    if (pts.length > 1) parts += '<polygon points="' + L + ',' + baseY.toFixed(1) + ' ' + poly + ' ' + (W - R) + ',' + baseY.toFixed(1) + '" class="profit-area"/>';
+    parts += '<polyline points="' + poly + '" class="profit-line"/>';
+    parts += pts.map(p => '<circle cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="3.6" class="profit-dot"><title>' + p.month + ' · 盈利 ' + C.amount(p.v) + ' 元</title></circle>' + (rows.length <= 12 ? '<text x="' + p.x.toFixed(1) + '" y="' + (p.y - 9).toFixed(1) + '" text-anchor="middle" class="profit-value-label">' + compactMoney(p.v) + '</text>' : '')).join('');
+    parts += pts.map(p => '<text x="' + p.x.toFixed(1) + '" y="' + (H - B + 20).toFixed(1) + '" text-anchor="middle" class="profit-x-label">' + xLabel(p.month) + '</text>').join('');
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="每月盈利折线图">' + parts + '</svg>';
+  }
+  function profitStatTile(label, cents, note) {
+    return '<div class="summary-item"><span class="summary-label">' + label + '</span><span class="summary-value"><em>¥</em><strong class="' + (cents !== null && cents < 0 ? 'negative' : '') + '">' + (cents === null ? '—' : C.amount(cents)) + '</strong></span>' + (note ? '<small>' + escape(note) + '</small>' : '') + '</div>';
+  }
+  function profitRatioCell(r) {
+    if (!r.revenue) return '<td class="numeric" data-label="工资占比">—</td>';
+    const ratio = r.payroll / r.revenue * 100;
+    const cls = ratio >= 40 ? 'ratio-high' : ratio >= 30 ? 'ratio-mid' : '';
+    return '<td class="numeric" data-label="工资占比"><span class="' + cls + '">' + ratio.toFixed(1) + '%</span></td>';
+  }
+  function renderProfit() {
+    const rows = profitRows();
+    $('profit-meta').textContent = '共 ' + rows.length + ' 个月有盈利数据';
+    if (rows.length) {
+      const sum = rows.reduce((t, r) => t + r.profit, 0);
+      const avg = Math.round(sum / rows.length);
+      const high = rows.reduce((a, b) => (a.profit >= b.profit ? a : b));
+      const low = rows.reduce((a, b) => (a.profit <= b.profit ? a : b));
+      $('profit-stats').innerHTML = profitStatTile('累计盈利', sum) + profitStatTile('月均盈利', avg) + profitStatTile('最高盈利月', high.profit, high.month) + profitStatTile('最低盈利月', low.profit, low.month);
+      $('profit-chart-note').textContent = '折线为每月“盈利 = 营业额 − 进货成本 − 其他费用 − 工资”。';
+      $('profit-chart').innerHTML = profitChartSVG(rows);
+    } else {
+      $('profit-stats').innerHTML = profitStatTile('累计盈利', null) + profitStatTile('月均盈利', null) + profitStatTile('最高盈利月', null) + profitStatTile('最低盈利月', null);
+      $('profit-chart-note').textContent = '';
+      $('profit-chart').innerHTML = '<div class="empty"><p class="empty-lead">还没有盈利数据。</p><p class="muted">在下方选择月份，填写营业额与成本后保存，这里就会出现折线图。</p></div>';
+    }
+    $('profit-body').innerHTML = rows.length ? rows.map(r => '<tr><td data-label="月份">' + escape(r.month) + '</td><td class="numeric" data-label="营业额">' + C.amount(r.revenue) + '</td><td class="numeric" data-label="进货成本">' + C.amount(r.goodsCost) + '</td><td class="numeric" data-label="其他费用">' + C.amount(r.otherCost) + '</td><td class="numeric" data-label="工资（自动）">' + C.amount(r.payroll) + '</td>' + profitRatioCell(r) + '<td class="numeric" data-label="盈利"><strong class="net ' + (r.profit < 0 ? 'negative' : '') + '">' + C.amount(r.profit) + '</strong></td><td data-label="备注">' + escape(r.note || '—') + '</td><td class="end" data-label="操作"><div class="row-actions"><button class="text-button edit-action" data-profit-edit="' + escape(r.month) + '">编辑</button><button class="text-button danger" data-profit-delete="' + escape(r.month) + '">删除</button></div></td></tr>').join('') : '<tr class="no-results"><td colspan="9"><div class="no-results-content">' + icon('trending-up') + '<span>尚无盈利记录</span><small>填写上面表单并保存后，这里会按月列出。</small></div></td></tr>';
+    $('profit-save').disabled = blocked;
+    $('profit-delete').disabled = blocked;
+  }
+  $('profit-month').addEventListener('change', safe(() => {
+    if (!C.monthValid($('profit-month').value)) { $('profit-month').value = currentMonth; throw new Error('请选择 2000—2099 年内的月份'); }
+    loadProfitEditor($('profit-month').value);
+  }));
+  ['profit-revenue', 'profit-goods', 'profit-other'].forEach(id => $(id).addEventListener('input', profitEditorPreview));
+  $('profit-save').addEventListener('click', safe(() => {
+    const month = $('profit-month').value;
+    if (!C.monthValid(month)) throw new Error('请选择 2000—2099 年内的月份');
+    const values = {revenue: moneyOpt($('profit-revenue').value), goodsCost: moneyOpt($('profit-goods').value), otherCost: moneyOpt($('profit-other').value), note: $('profit-note').value.trim()};
+    if (!values.revenue && !values.goodsCost && !values.otherCost && !values.note) { toast('请先填写营业额、成本或备注'); return; }
+    commit(s => C.setProfit(s, month, values));
+    loadProfitEditor(month); toast('盈利数据已保存');
+  }));
+  $('profit-delete').addEventListener('click', safe(() => {
+    const month = $('profit-month').value;
+    if (!state.profits?.[month]) return;
+    if (!confirm('删除 ' + month + ' 的盈利记录？当月工资数据不受影响。')) return;
+    commit(s => C.deleteProfit(s, month));
+    loadProfitEditor(month); toast('盈利记录已删除');
+  }));
+  $('profit-month').value = currentMonth;
+  loadProfitEditor(currentMonth);
 
   // ---- AI 查账 ----
   const AI = window.PayrollAI;
