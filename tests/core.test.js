@@ -348,6 +348,16 @@ test('取消确认清除说明；重复确认不产生日志',()=>{
   assert.equal(s.months['2026-11'].rows[0].review.confirmed,false);
   assert.equal(s.months['2026-11'].rows[0].review.reason,'');
 });
+test('锁账与解锁会写入可筛选的操作日志',()=>{
+  const s=fixture();
+  C.setConfirmed(s,'2026-11','employee-1',true);
+  C.setLock(s,'2026-11',true);
+  C.setLock(s,'2026-11',false,'发现提成录错');
+  const lockLogs=s.logs.filter(l=>/已审核锁账|解锁，原因/.test(l.message));
+  assert.equal(lockLogs.length,2);
+  assert.match(lockLogs[0].message,/解锁，原因：发现提成录错/);
+  assert.match(lockLogs[1].message,/已审核锁账/);
+});
 test('员工手机号与微信号可选填并校验长度',()=>{
   const s=fixture();
   s.employees[0].phone='13800138000';s.employees[0].wechat='wx_abc';

@@ -216,6 +216,8 @@
     $('shop-filter').innerHTML = options(selected, true);
     renderPayroll(); renderEmployees(); renderProfit();
     $('shops-inputs').innerHTML = state.shops.map(s => `<div class="shop-row" data-shop-row="${escape(s.id)}"><input data-shop-name value="${escape(s.name)}" maxlength="60" required placeholder="店名" ${blocked?'disabled':''}><select data-shop-type aria-label="店铺类型" ${blocked?'disabled':''}><option value="线下"${s.type==='线下'?' selected':''}>线下实体店</option><option value="线上"${s.type==='线上'?' selected':''}>线上淘宝店</option></select><button type="button" class="text-button danger" data-delete-shop="${escape(s.id)}" ${blocked?'disabled':''}>${icon('trash')}删除</button></div>`).join('');
+    const lockLogs = state.logs.filter(l => /已审核锁账|解锁，原因/.test(l.message));
+    $('lock-audit-list').innerHTML = lockLogs.length ? lockLogs.map(l => `<div class="audit-entry"><time>${escape(new Date(l.at).toLocaleString('zh-CN', {hour12: false}))}</time>${escape(l.message)}</div>`).join('') : '<p class="muted">还没有锁账或解锁记录。</p>';
     $('audit-list').innerHTML = state.logs.length ? state.logs.slice(0, 50).map(l => `<div class="audit-entry"><time>${escape(new Date(l.at).toLocaleString('zh-CN', {hour12: false}))}</time>${escape(l.message)}</div>`).join('') + (state.logs.length > 50 ? '<p class="muted">页面仅展示最近 50 条，完整记录包含在备份中。</p>' : '') : '<p class="muted">还没有操作记录。</p>';
     $('add-employee').disabled = blocked;
     $('add-shop').disabled = blocked;

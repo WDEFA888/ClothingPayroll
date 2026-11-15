@@ -260,7 +260,7 @@ async function freePort() { const s = net.createServer(); await new Promise(r=>s
     await click('#salary-form button[type=submit]');await wait("!document.querySelector('#salary-dialog').open");
     await reload();await wait("document.querySelector('#payroll-body').textContent.includes('4590.30')");
     console.log('PASS 真实鼠标建档、跨店去重、七项计算与刷新持久化');
-    await click('#lock');await wait("document.querySelector('#lock-badge').textContent==='已锁账'");
+    await click('[data-confirm]');await click('#lock');await wait("document.querySelector('#lock-badge').textContent==='已锁账'");
     assert.equal(await evaluate("document.querySelector('[data-edit-salary]').disabled"),true);
     assert.equal(await evaluate("document.querySelector('#generate').disabled"),true);
     assert.equal(await evaluate("document.querySelectorAll('[data-remove]').length"),0);

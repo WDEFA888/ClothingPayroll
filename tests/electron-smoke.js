@@ -106,7 +106,7 @@ async function freePort() { const s = net.createServer(); await new Promise(r =>
     assert.equal(await evaluate("document.querySelector('#salary-commission').value"), '1234.56');
     assert.ok(dialogs.some(text=>text.includes('不能为负数')));
     await click('#salary-dialog .dialog-footer [data-close]');
-    await click('#lock');await wait("document.querySelector('#lock-badge').textContent==='已锁账'");
+    await click('[data-confirm]');await click('#lock');await wait("document.querySelector('#lock-badge').textContent==='已锁账'");
     await click('#lock');await wait("document.querySelector('#prompt-dialog').open");
     await fill('#prompt-input', '虚构测试：重新核对提成');await click('#prompt-submit');
     await wait("!document.querySelector('#prompt-dialog').open && document.querySelector('#lock-badge').textContent==='待核对'");

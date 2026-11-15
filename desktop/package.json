@@ -1,7 +1,7 @@
 {
   "name": "yizhang-payroll",
   "productName": "衣账工资助手",
-  "version": "0.4.26",
+  "version": "0.4.27",
   "description": "衣账 · 多店工资助手（单机版，数据保存在本机）",
   "main": "main.js",
   "author": "衣账",

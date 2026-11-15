@@ -21,7 +21,7 @@
     </nav>
     <div class="sidebar-bottom">
       <div class="local-card"><span data-icon="hard-drive" aria-hidden="true"></span><div><span>数据仅保存在本机</span><button data-view="settings">立即备份</button></div></div>
-      <div class="sidebar-version">单机版 v0.4.26</div>
+      <div class="sidebar-version">单机版 v0.4.27</div>
     </div>
   </aside>
   <main>
@@ -64,6 +64,7 @@
         <div class="page-heading"><div class="page-title"><h1>店铺与备份</h1><p class="page-meta">数据只保存在当前电脑</p></div></div>
         <div class="settings-grid"><div class="panel card"><div class="card-heading"><h2>店铺管理</h2></div><p class="muted">开新店时点“添加店铺”；“待确认归属”只是临时分类，不算店铺。</p><form id="shops-form"><div id="shops-inputs"></div><div class="actions"><button type="button" id="add-shop" class="button"><span data-icon="plus" aria-hidden="true"></span>添加店铺</button><button type="submit" id="save-shops" class="button primary">保存店名</button></div></form></div>
         <div class="panel card"><div class="card-heading"><h2>数据备份与恢复</h2></div><p>每次核对完成后下载完整备份，保存到受保护的文件夹。</p><div class="actions"><button id="backup" class="button primary"><span data-icon="download" aria-hidden="true"></span>下载完整备份</button><button id="restore" class="button">恢复备份</button></div><input id="restore-file" type="file" accept=".json,application/json" hidden><div class="warning-note">备份和导出文件都是明文敏感数据。恢复会替换当前空间的数据，请先备份。v0.1 的旧备份可以导入，新项目补 0，不重算原金额。</div><p class="muted">网页文件不包含工资数据。换浏览器、清理浏览器数据或使用无痕模式，可能找不到原数据，请用 JSON 备份迁移。</p><div class="danger-zone"><h3>清空数据</h3><p class="muted">删除正式空间和演示空间的全部员工、工资、锁账、操作记录和月度备注。不可撤销，请先下载备份。</p><button id="clear-data" class="button danger">清空全部本机数据</button></div></div></div>
+        <div class="panel card audit-panel"><div class="card-heading"><h2>锁账 / 解锁记录</h2></div><p class="muted">每次审核锁账、以及解锁时填写的原因，都会单独列在这里。</p><div id="lock-audit-list"></div></div>
         <div class="panel card audit-panel"><div class="card-heading"><h2>最近操作</h2></div><p class="muted">保留最近 500 条本地记录，不是防篡改审计，也不区分操作人。</p><div id="audit-list"></div></div>
       </section>
       <section id="view-ai" class="view" hidden>
@@ -110,7 +111,7 @@
         <div class="page-heading"><div class="page-title"><h1>使用说明</h1><p class="page-meta">单机版，不替代公司发薪审核</p></div></div>
         <div class="panel card guide"><h2>按店家工资单导入</h2><ol><li><strong>点击“导入 Excel”。</strong>选择 .xlsx 文件，全部在本机解析，不上传、不执行公式或宏。</li><li><strong>先看月份。</strong>原表为 2026 年 9 月就按 9 月导入，不会自动改成当前月份。多个月份需按月分批勾选。</li><li><strong>确认店铺与员工匹配。</strong>未确定店铺先选“待确认归属”。同名匹配会显示在预览中，可改成新建或选择已有员工；重复编号不作为员工身份。</li><li><strong>检查原表实发与软件计算。</strong>明确的“退押金”“扣押金”“提成”“补500+1500”备注会列入对应项目；有歧义则保留备注并提示，绝不自动用差额补齐。</li><li><strong>补充缺项、填写核实说明。</strong>有请假天数不自动推算扣款；“社保”处于应发栏时单独保留为应发项。店铺必须实际分配；差异和空缺可在向公司核实后填写说明确认。</li><li><strong>核对锁账、导出并备份。</strong>Excel 含“工资汇总”和“工资条”两个表，未核实的记录会明确标注。个人工资条只含个人。JSON 用于完整恢复。</li></ol><h2>手工建档和计算</h2><p>先填写员工档案，再按月份生成工资表。基础工资之外的项目不会自动复制上月金额。历史月份生成时使用当前在职档案，需人工核对名单、底薪及考勤。所有金额按非负数填写，精确到分；软件实发按各项收入减各项扣款计算。</p><h2>提成小助手</h2><p>在“编辑工资”弹窗上方，默认可以手动输入提成金额，也可选按比例、每件提成或自定义算式。业绩、比例、件数和每件金额均可手填。点“填入提成”只把金额写进提成栏，仍需保存本月工资才生效。</p><h2>旧数据与原表</h2><p>旧版数据会兼容读取，不改动原来的工资金额；原始 Excel 始终只读。导入保留源文件名、SHA-256 指纹、工作表、行号、关键单元格和原表实发。软件实发与原表实发分开保存，修改软件金额不会篡改原表实发。</p><h2>使用边界与数据安全</h2><p>暂无登录权限、多人协作、加密存储、个税计算、银行发薪或淘宝对接。押金项目仅用于如实核对历史表，是否可以扣收应由公司核实，不作为新员工默认扣款。锁账只防误改，不代表已经支付。真实工资仅在受控设备使用，备份和导出文件不要公开分享。请定期下载 JSON 备份。</p></div>
       </section>
-      <footer class="page-footer"><span>衣账 v0.4.26</span><span>本地运行</span></footer>
+      <footer class="page-footer"><span>衣账 v0.4.27</span><span>本地运行</span></footer>
     </div>
   </main>
 </div>

@@ -45,7 +45,7 @@ async function freePort() { const s = net.createServer(); await new Promise(r=>s
     await evaluate("document.getElementById('profit-revenue').value='100000';document.getElementById('profit-goods').value='40000';document.getElementById('profit-other').value='5000';document.getElementById('profit-save').click()");
     const chartHasSvg = await evaluate("document.getElementById('profit-chart').innerHTML.includes('<svg')");
     const rowCount = await evaluate("document.getElementById('profit-body').querySelectorAll('tr').length");
-    const profitCell = await evaluate("document.querySelector('#profit-body tr td:nth-child(6)').textContent.trim()");
+    const profitCell = await evaluate("document.querySelector('#profit-body tr td:nth-child(7)').textContent.trim()");
     const saved = await evaluate("JSON.parse(localStorage.getItem('yizhang-payroll-v1')).profits['2026-11']");
     assert.ok(chartHasSvg,'保存后应出现 SVG 折线图');
     assert.equal(rowCount,1,'应有一行历史盈利');

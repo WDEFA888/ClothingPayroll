@@ -80,6 +80,7 @@ test('AI 建议校验：非法金额、非法字段、无记录时报错', () =>
 
 test('AI 建议拒绝已锁账月份', () => {
   const s = fixture();
+  s.months['2026-11'].rows.forEach(r => C.setConfirmed(s, '2026-11', r.employeeId, true));
   C.setLock(s, '2026-11', true);
   assert.throws(() => AI.executeQuery({ type: 'suggest_update', employee: '张三', month: '2026-11', field: 'commission', value: 100 }, s), /锁账/);
   assert.throws(() => AI.executeQuery({ type: 'suggest_batch', month: '2026-11', field: 'mealAllowance', value: 100 }, s), /锁账/);
